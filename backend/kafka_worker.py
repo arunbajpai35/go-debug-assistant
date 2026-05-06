@@ -6,19 +6,16 @@ pipeline whenever:
   - the buffer has been idle for `KAFKA_FLUSH_IDLE_SECONDS`.
 
 reliability:
-  - manual offset commit. on success we commit; on failure we re-buffer and bump a retry counter.
+  - manual offset commit, **per-partition precise**. each message is registered with its
+    (topic, partition, offset) in OffsetTracker; only the earliest-still-unprocessed offset per
+    partition is committed. a hard kill mid-buffer redelivers exactly the unprocessed traces,
+    not the already-flushed ones.
+  - on flush failure: the bundle is re-buffered and a retry counter bumped. offsets stay
+    in-flight so we don't commit past them.
   - after `KAFKA_MAX_BUNDLE_RETRIES` failed flushes for the same trace_id, the bundle is shipped
-    to `KAFKA_DLQ_TOPIC` and the offset is committed so the worker stops looping on it.
-  - sigint/sigterm flips a flag; the main loop exits cleanly between batches and any in-flight
-    flush completes before close.
-
-caveat: kafka offset commits are coarse — `consumer.commit()` advances the partition cursor past
-*all* consumed messages, not just the bundle's. that means if a t1 bundle commits while t2 is
-still buffered, a crash before t2 flushes will not redeliver t2's messages. the worker mitigates
-this with the buffered+uncommitted backlog (a clean restart preserves anything not yet consumed
-from the partition) but a hard kill mid-buffer can lose t2. fixing that needs per-partition
-offset tracking; documented here, deliberately not done in v1.
-"""
+    to `KAFKA_DLQ_TOPIC`, the trace's offsets are completed, and the per-partition watermark
+    advances normally.
+  - sigint/sigterm flips a flag; the main loop drains remaining buffers, then exits."""
 import json
 import logging
 import signal
@@ -39,6 +36,7 @@ from backend.config import (
     KAFKA_TOPIC,
     WINDOW_SECONDS,
 )
+from backend.kafka_offsets import OffsetTracker
 
 tracing.init(service_name="debug-assistant-worker")
 
@@ -79,6 +77,7 @@ def consume() -> None:
     db.init_pool()
     consumer = _make_consumer()
     producer = _make_producer()
+    tracker = OffsetTracker()
     log.info(
         "kafka worker started topic=%s dlq=%s group=%s batch_max=%d idle_s=%d max_retries=%d",
         KAFKA_TOPIC,
@@ -105,21 +104,22 @@ def consume() -> None:
                     continue
                 buffers[trace_id].append(entry)
                 last_seen[trace_id] = time.time()
+                tracker.add(msg.topic, msg.partition, msg.offset, trace_id)
                 metrics.logs_ingested.labels(source="kafka").inc()
                 metrics.worker_buffers.set(len(buffers))
                 if len(buffers[trace_id]) >= KAFKA_BATCH_MAX:
                     log.info("flushing trace_id=%s reason=batch_full size=%d", trace_id, len(buffers[trace_id]))
-                    _flush(trace_id, buffers, last_seen, retry_count, consumer, producer)
+                    _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
             now = time.time()
             for trace_id in list(buffers.keys()):
                 if now - last_seen.get(trace_id, now) >= KAFKA_FLUSH_IDLE_SECONDS:
                     log.info("flushing trace_id=%s reason=idle size=%d", trace_id, len(buffers[trace_id]))
-                    _flush(trace_id, buffers, last_seen, retry_count, consumer, producer)
+                    _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
         log.info("draining %d remaining buffer(s) before exit", len(buffers))
         for trace_id in list(buffers.keys()):
-            _flush(trace_id, buffers, last_seen, retry_count, consumer, producer)
+            _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
     finally:
         producer.flush()
@@ -133,6 +133,7 @@ def _flush(
     buffers: dict,
     last_seen: dict,
     retry_count: dict,
+    tracker: OffsetTracker,
     consumer: KafkaConsumer,
     producer: KafkaProducer,
 ) -> None:
@@ -143,7 +144,9 @@ def _flush(
         return
     try:
         pipeline.process(bundle, window_seconds=WINDOW_SECONDS)
-        consumer.commit()
+        commits = tracker.complete(trace_id)
+        if commits:
+            consumer.commit(offsets=commits)
         retry_count.pop(trace_id, None)
         return
     except Exception:
@@ -154,7 +157,9 @@ def _flush(
         for entry in bundle:
             producer.send(KAFKA_DLQ_TOPIC, entry)
         producer.flush()
-        consumer.commit()
+        commits = tracker.complete(trace_id)
+        if commits:
+            consumer.commit(offsets=commits)
         retry_count.pop(trace_id, None)
         metrics.bundles_dlq.inc()
         log.error("dlq trace_id=%s after %d attempts size=%d", trace_id, attempt - 1, len(bundle))

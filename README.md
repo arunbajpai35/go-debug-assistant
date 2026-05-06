@@ -38,6 +38,10 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 - prometheus_client for metrics
 - pytest for unit tests on the correlator
 
+## kafka offset semantics
+
+the worker tracks each consumed message as `(topic, partition, offset, trace_id)`. on bundle completion (success or dlq) it removes those offsets from the partition's in-flight set and commits the earliest still-unprocessed offset on each affected partition. this is precise per-partition offset tracking — a hard kill mid-buffer redelivers exactly the unprocessed traces, not already-flushed ones.
+
 ## measured throughput
 
 bench machine: m2 mac, single-process, postgres in local docker. produced with `PYTHONPATH=. python scripts/benchmark.py --events 20000 --traces 200` against the compose stack.
