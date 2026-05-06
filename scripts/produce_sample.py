@@ -11,7 +11,7 @@ import os
 import random
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from kafka import KafkaProducer
 
@@ -30,7 +30,7 @@ TEMPLATES = [
 
 def synthetic_log(trace_id: str) -> dict:
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "level": random.choice(LEVELS),
         "trace_id": trace_id,
         "message": random.choice(TEMPLATES).format(

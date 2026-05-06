@@ -1,0 +1,108 @@
+[
+  {
+    "id": "db_timeout",
+    "logs": [
+      {"timestamp": "2026-05-06T10:00:00Z", "level": "INFO",  "trace_id": "t1", "message": "POST /checkout received user_id=42"},
+      {"timestamp": "2026-05-06T10:00:01Z", "level": "WARN",  "trace_id": "t1", "message": "db connection acquire took 2400ms"},
+      {"timestamp": "2026-05-06T10:00:03Z", "level": "ERROR", "trace_id": "t1", "message": "psycopg2.OperationalError: timeout expired after 5000ms while waiting for db connection"},
+      {"timestamp": "2026-05-06T10:00:03Z", "level": "ERROR", "trace_id": "t1", "message": "checkout failed: db_unreachable"}
+    ],
+    "expected_keywords": ["db", "timeout", "connection"],
+    "anti_keywords": ["auth", "rate", "memory"]
+  },
+  {
+    "id": "expired_token",
+    "logs": [
+      {"timestamp": "2026-05-06T10:01:00Z", "level": "INFO",  "trace_id": "t2", "message": "GET /me started"},
+      {"timestamp": "2026-05-06T10:01:00Z", "level": "DEBUG", "trace_id": "t2", "message": "verifying jwt iss=auth.example exp=2026-05-06T09:55:00Z"},
+      {"timestamp": "2026-05-06T10:01:00Z", "level": "ERROR", "trace_id": "t2", "message": "jwt validation failed: token expired"},
+      {"timestamp": "2026-05-06T10:01:00Z", "level": "WARN",  "trace_id": "t2", "message": "returning 401 to client"}
+    ],
+    "expected_keywords": ["token", "expired"],
+    "anti_keywords": ["db", "timeout", "memory"]
+  },
+  {
+    "id": "rate_limit_upstream",
+    "logs": [
+      {"timestamp": "2026-05-06T10:02:00Z", "level": "INFO",  "trace_id": "t3", "message": "POST /search forwarded to elasticsearch"},
+      {"timestamp": "2026-05-06T10:02:01Z", "level": "WARN",  "trace_id": "t3", "message": "elasticsearch returned 429 retry_after=1"},
+      {"timestamp": "2026-05-06T10:02:02Z", "level": "WARN",  "trace_id": "t3", "message": "elasticsearch returned 429 retry_after=2"},
+      {"timestamp": "2026-05-06T10:02:04Z", "level": "ERROR", "trace_id": "t3", "message": "search aborted: upstream rate limit exhausted after 3 retries"}
+    ],
+    "expected_keywords": ["rate", "limit", "429"],
+    "anti_keywords": ["db", "auth", "memory"]
+  },
+  {
+    "id": "oom_kill",
+    "logs": [
+      {"timestamp": "2026-05-06T10:03:00Z", "level": "INFO",  "trace_id": "t4", "message": "loading 200k rows for analytics export"},
+      {"timestamp": "2026-05-06T10:03:08Z", "level": "WARN",  "trace_id": "t4", "message": "memory usage 92% rss=3.6GB"},
+      {"timestamp": "2026-05-06T10:03:10Z", "level": "ERROR", "trace_id": "t4", "message": "MemoryError: cannot allocate buffer"},
+      {"timestamp": "2026-05-06T10:03:10Z", "level": "FATAL", "trace_id": "t4", "message": "process killed by oom-killer signal=9"}
+    ],
+    "expected_keywords": ["memory", "oom"],
+    "anti_keywords": ["db", "rate", "token"]
+  },
+  {
+    "id": "stale_cache",
+    "logs": [
+      {"timestamp": "2026-05-06T10:04:00Z", "level": "INFO",  "trace_id": "t5", "message": "GET /price?sku=abc -> 99.00 (cache hit)"},
+      {"timestamp": "2026-05-06T10:04:02Z", "level": "WARN",  "trace_id": "t5", "message": "checkout total 99.00 mismatch with current price 129.00 from db"},
+      {"timestamp": "2026-05-06T10:04:02Z", "level": "ERROR", "trace_id": "t5", "message": "price_inconsistency: cached_price=99.00 db_price=129.00 sku=abc"}
+    ],
+    "expected_keywords": ["cache", "stale", "price"],
+    "anti_keywords": ["db down", "rate", "memory"]
+  },
+  {
+    "id": "missing_index",
+    "logs": [
+      {"timestamp": "2026-05-06T10:05:00Z", "level": "INFO",  "trace_id": "t6", "message": "GET /orders?user_id=42 started"},
+      {"timestamp": "2026-05-06T10:05:08Z", "level": "WARN",  "trace_id": "t6", "message": "slow query 8200ms: SELECT * FROM orders WHERE user_id=42 ORDER BY created_at DESC"},
+      {"timestamp": "2026-05-06T10:05:08Z", "level": "WARN",  "trace_id": "t6", "message": "EXPLAIN: Seq Scan on orders rows=12000000"},
+      {"timestamp": "2026-05-06T10:05:08Z", "level": "INFO",  "trace_id": "t6", "message": "GET /orders -> 200 8205ms"}
+    ],
+    "expected_keywords": ["index", "scan", "slow"],
+    "anti_keywords": ["auth", "memory", "rate"]
+  },
+  {
+    "id": "deadlock",
+    "logs": [
+      {"timestamp": "2026-05-06T10:06:00Z", "level": "INFO",  "trace_id": "t7", "message": "txn-A: UPDATE accounts SET bal=bal-10 WHERE id=1"},
+      {"timestamp": "2026-05-06T10:06:00Z", "level": "INFO",  "trace_id": "t7", "message": "txn-B: UPDATE accounts SET bal=bal-5 WHERE id=2"},
+      {"timestamp": "2026-05-06T10:06:01Z", "level": "INFO",  "trace_id": "t7", "message": "txn-A: UPDATE accounts SET bal=bal+10 WHERE id=2 (waiting)"},
+      {"timestamp": "2026-05-06T10:06:01Z", "level": "ERROR", "trace_id": "t7", "message": "psycopg2.errors.DeadlockDetected: deadlock detected; rolling back txn-A"}
+    ],
+    "expected_keywords": ["deadlock", "txn"],
+    "anti_keywords": ["memory", "rate", "auth"]
+  },
+  {
+    "id": "tls_cert_expired",
+    "logs": [
+      {"timestamp": "2026-05-06T10:07:00Z", "level": "INFO",  "trace_id": "t8", "message": "outbound POST https://payments.partner.example/charge"},
+      {"timestamp": "2026-05-06T10:07:00Z", "level": "ERROR", "trace_id": "t8", "message": "ssl.SSLCertVerificationError: certificate has expired (_ssl.c:1006)"},
+      {"timestamp": "2026-05-06T10:07:00Z", "level": "ERROR", "trace_id": "t8", "message": "charge failed: tls verification"}
+    ],
+    "expected_keywords": ["tls", "certificate", "expired"],
+    "anti_keywords": ["db", "memory", "rate"]
+  },
+  {
+    "id": "kafka_lag",
+    "logs": [
+      {"timestamp": "2026-05-06T10:08:00Z", "level": "INFO",  "trace_id": "t9", "message": "consumer lag topic=orders partition=0 lag=42000"},
+      {"timestamp": "2026-05-06T10:08:30Z", "level": "WARN",  "trace_id": "t9", "message": "consumer lag topic=orders partition=0 lag=58000 (growing)"},
+      {"timestamp": "2026-05-06T10:08:30Z", "level": "WARN",  "trace_id": "t9", "message": "downstream sla breach: orders processing latency p99=42s"}
+    ],
+    "expected_keywords": ["lag", "consumer", "kafka"],
+    "anti_keywords": ["auth", "memory", "rate limit"]
+  },
+  {
+    "id": "config_misset",
+    "logs": [
+      {"timestamp": "2026-05-06T10:09:00Z", "level": "INFO",  "trace_id": "t10", "message": "service starting env=staging"},
+      {"timestamp": "2026-05-06T10:09:00Z", "level": "WARN",  "trace_id": "t10", "message": "kafka brokers resolved to prod-kafka-1:9092 in env=staging"},
+      {"timestamp": "2026-05-06T10:09:00Z", "level": "ERROR", "trace_id": "t10", "message": "events flowing to prod topic from staging service: cross-environment leak detected"}
+    ],
+    "expected_keywords": ["config", "environment", "staging"],
+    "anti_keywords": ["memory", "auth", "deadlock"]
+  }
+]

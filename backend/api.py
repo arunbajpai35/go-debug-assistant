@@ -6,8 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
-from backend import db, metrics, pipeline
+from backend import db, metrics, pipeline, tracing
 from backend.config import CORS_ORIGINS, MAX_LOGS_PER_REQUEST, WINDOW_SECONDS
+
+tracing.init()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger(__name__)
@@ -25,7 +27,8 @@ class AnalyzeRequest(BaseModel):
     window_seconds: int | None = None
 
 
-app = FastAPI(title="debug-assistant", version="0.3.0")
+app = FastAPI(title="debug-assistant", version="0.4.0")
+tracing.instrument_fastapi(app)
 
 app.add_middleware(
     CORSMiddleware,

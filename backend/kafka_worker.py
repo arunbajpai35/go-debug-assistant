@@ -13,8 +13,10 @@ from collections import defaultdict
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 
-from backend import db, metrics, pipeline
+from backend import db, metrics, pipeline, tracing
 from backend.config import KAFKA_BROKERS, KAFKA_GROUP, KAFKA_TOPIC, WINDOW_SECONDS
+
+tracing.init(service_name="debug-assistant-worker")
 
 log = logging.getLogger(__name__)
 
