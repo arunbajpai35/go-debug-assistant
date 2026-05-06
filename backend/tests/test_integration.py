@@ -17,12 +17,14 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def app_client():
+    import subprocess
+    import sys
+
     from backend import db
-    from backend.migrate import run_migrations
+
+    subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], check=True)
 
     db.init_pool()
-    run_migrations()
-
     from backend.api import app
 
     with TestClient(app) as c:

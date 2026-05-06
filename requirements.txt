@@ -4,6 +4,8 @@ pydantic==2.11.7
 python-dotenv==1.1.1
 openai==1.97.0
 psycopg2-binary==2.9.10
+sqlalchemy==2.0.36
+alembic==1.14.0
 kafka-python==2.2.15
 prometheus-client==0.20.0
 pytest==8.3.3
