@@ -113,6 +113,16 @@ def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/version")
+def version() -> dict:
+    import os
+    return {
+        "version": app.version,
+        "git_sha": os.getenv("GIT_SHA", "unknown"),
+        "build_date": os.getenv("BUILD_DATE", "unknown"),
+    }
+
+
 @app.get("/budget")
 def budget_status() -> dict:
     return {

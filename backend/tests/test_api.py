@@ -20,6 +20,15 @@ def test_healthz_returns_ok(client):
     assert r.json() == {"ok": True}
 
 
+def test_version_returns_metadata(client):
+    r = client.get("/version")
+    assert r.status_code == 200
+    body = r.json()
+    assert "version" in body
+    assert "git_sha" in body
+    assert "build_date" in body
+
+
 def test_metrics_exposes_prometheus_text(client):
     r = client.get("/metrics")
     assert r.status_code == 200

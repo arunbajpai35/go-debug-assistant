@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt ruff mypy
+      - run: pip install -r requirements-dev.txt
       - run: ruff check .
       - run: mypy backend
       - run: pytest backend/tests -q
@@ -48,5 +48,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
       - run: pytest backend/tests/test_integration.py -q
+
+  openapi-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: regenerate openapi.json and assert no diff
+        run: |
+          python scripts/dump_openapi.py > /tmp/openapi.new.json
+          diff -u openapi.json /tmp/openapi.new.json
