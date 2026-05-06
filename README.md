@@ -38,13 +38,48 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 - prometheus_client for metrics
 - pytest for unit tests on the correlator
 
+## measured throughput
+
+bench machine: m2 mac, single-process, postgres in local docker. produced with `PYTHONPATH=. python scripts/benchmark.py --events 20000 --traces 200` against the compose stack.
+
+| stage                     | throughput        |
+|---------------------------|-------------------|
+| correlate (in-memory)     | ~29,000 events/s  |
+| save_analysis (postgres)  | ~2,500 rows/s     |
+| pipeline (llm stubbed)    | ~5,000 events/s   |
+
+these are dev-machine numbers, single-process, no batching of inserts. don't read them as production capacity. they exist so claims in this readme are checkable, not vibes.
+
+llm latency is excluded on purpose — that number reports azure's behaviour, not this code's.
+
+## eval
+
+10 hand-labeled trace bundles in `eval/dataset.json`, scored by keyword + anti-keyword hit rate. small enough to be honest about: this is a smoke test for prompt regressions, not a benchmark. see `eval/README.md` for what it is and what it isn't.
+
+```bash
+python -m eval.run_eval                   # all cases, requires real azure creds
+python -m eval.run_eval --case db_timeout
+```
+
+## tracing
+
+opentelemetry spans around `pipeline.process` → `correlate` → `llm.analyze` → `db.save_analysis`. fastapi + psycopg2 are auto-instrumented.
+
+```bash
+# console export for local debugging
+OTEL_CONSOLE=true docker compose -f docker/docker-compose.yml up
+
+# OTLP export (jaeger, tempo, datadog agent, etc.)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317 docker compose ...
+```
+
 ## what's NOT here (deliberate, called out so the readme doesn't lie)
 
 - no react dashboard. previous version had a textarea + json dump; it didn't add anything over `curl /analyze | jq`. dropped.
 - no multi-agent orchestration. previous version called three "agents" (root_cause / fix_suggester / impact) sequentially against the same log bundle. that's three llm calls for marginal extra signal. one prompt does the same job for 1/3 the cost and latency.
-- no eval harness. there's no labeled dataset, no accuracy/precision claim. don't trust the llm output without one.
-- no benchmark numbers. compose stack runs locally; throughput hasn't been measured under load. would need a k6/locust pass to claim a number.
+- the eval set has 10 cases. that's enough to spot regressions, not enough to claim accuracy.
 - no auth, no rate limiting, no multi-tenant. single-deployment dev tool.
+- no insert batching on `save_analysis`. fixing it would 10x the ~2.5k rows/s number; left as a deliberate todo.
 
 ## run it
 
@@ -114,9 +149,9 @@ docker/
 
 ## things i'd do next if i kept building this
 
-- proper eval set: 50 hand-labeled trace bundles with known root causes, run nightly, track regression.
-- otel tracing through pipeline (currently only structured logs + counters).
-- replace single prompt with prompt versioning + a/b on each version.
-- partition `analyses` by `created_at` once it gets big.
+- expand eval set to 50+ cases; switch from keyword scoring to embedding-similarity vs gold answers.
+- batch `save_analysis` inserts (single-row inserts cap throughput at ~2.5k rows/s in the local bench).
+- prompt versioning + side-by-side a/b runs against the eval set per version.
 - circuit breaker around the llm call; fall back to template-based "no analysis" if azure is down.
-- replace simple connection pool with a real one (asyncpg + sqlalchemy).
+- partition `analyses` by `created_at` once it gets big.
+- replace simple connection pool with asyncpg + sqlalchemy core.
