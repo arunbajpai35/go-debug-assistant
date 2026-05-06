@@ -64,7 +64,8 @@ def analyze(log_text: str, window_seconds: int) -> tuple[str, str]:
                 temperature=0.2,
                 max_tokens=400,
             )
-            return resp.choices[0].message.content.strip(), AZURE_OPENAI_DEPLOYMENT
+            content = resp.choices[0].message.content or ""
+            return content.strip(), AZURE_OPENAI_DEPLOYMENT
         except RateLimitError as e:
             last_err = e
             wait = 2**attempt

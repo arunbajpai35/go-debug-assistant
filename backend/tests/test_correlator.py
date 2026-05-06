@@ -6,7 +6,9 @@ def test_parse_ts_z_suffix():
 
 
 def test_parse_ts_offset():
-    assert parse_ts("2026-05-06T10:00:00+05:30").utcoffset().seconds == 5 * 3600 + 30 * 60
+    offset = parse_ts("2026-05-06T10:00:00+05:30").utcoffset()
+    assert offset is not None
+    assert offset.seconds == 5 * 3600 + 30 * 60
 
 
 def test_correlate_groups_by_trace_within_window():
