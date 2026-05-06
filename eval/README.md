@@ -52,7 +52,21 @@ three modes (`--scorer`):
 
 a case is "passing" if `case_score >= 0.7`. embedding similarity is a stronger signal than keyword match but is not ground truth — it rewards answers that *sound* like the gold answer, not necessarily ones that are operationally correct.
 
+## agreement (multi-seed runs)
+
+```bash
+python -m eval.run_eval --runs 3 --temperature 0.7
+```
+
+each case runs N times with seeds 1..N. per case we record:
+- `agreement_pairwise_cos` — mean cosine similarity across all pairs of run embeddings.
+- `agreement_category` — fraction of run pairs that picked the same `category`.
+
+high pairwise cos with high category agreement = the model is consistent on this case under sampling.
+high cos but low category agreement = the model wanders semantically while keeping the same vocabulary, or vice-versa.
+
+cost: `--runs N` multiplies the llm bill by N. embeddings for identical run outputs hit the local cache so duplicate scoring is free.
+
 ## what's still missing (deliberate, not pretending)
 
 - structured outputs scored against named fields (root_cause, category) instead of free text. v3 prompt already populates them; the scorer doesn't yet use them directly.
-- agreement metric across multiple llm runs (same case, same prompt, multiple seeds) — coming next.
