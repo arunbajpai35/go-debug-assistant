@@ -34,6 +34,10 @@ KAFKA_MAX_BUNDLE_RETRIES = int(_env("KAFKA_MAX_BUNDLE_RETRIES", "3"))
 
 CORS_ORIGINS = [o.strip() for o in _env("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
+# distributed state for rate limit + budget when running >1 replica.
+# unset = in-memory (single-replica only).
+REDIS_URL = _env("REDIS_URL", "")
+
 WINDOW_SECONDS = int(_env("WINDOW_SECONDS", "60"))
 MAX_LOGS_PER_REQUEST = int(_env("MAX_LOGS_PER_REQUEST", "5000"))
 LLM_TIMEOUT_SECONDS = int(_env("LLM_TIMEOUT_SECONDS", "30"))
