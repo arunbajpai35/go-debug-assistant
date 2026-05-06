@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
@@ -27,7 +29,19 @@ class AnalyzeRequest(BaseModel):
     window_seconds: int | None = None
 
 
-app = FastAPI(title="debug-assistant", version="0.4.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    try:
+        db.init_pool()
+    except Exception:
+        log.exception("postgres pool init failed; api will start but persistence is unavailable")
+    try:
+        yield
+    finally:
+        db.close_pool()
+
+
+app = FastAPI(title="debug-assistant", version="0.5.0", lifespan=lifespan)
 tracing.instrument_fastapi(app)
 
 app.add_middleware(
@@ -37,19 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    try:
-        db.init_pool()
-    except Exception:
-        log.exception("postgres pool init failed; api will start but persistence is unavailable")
-
-
-@app.on_event("shutdown")
-def _shutdown() -> None:
-    db.close_pool()
 
 
 @app.get("/healthz")
