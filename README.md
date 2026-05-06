@@ -58,7 +58,7 @@ An AI-powered debugging assistant for backend developers that **analyzes logs**,
   * Parallel queries to DeepSeek and Azure GPT.
   * Aggregates suggestions with metadata and AI scores.
 
-* **API Layer** (`api.py`, `cmd/analyze_server.py`):
+* **API Layer** (`backend/api.py`):
 
   * `/analyze`: Accepts logs and returns correlated fixes.
   * `/timeline`: Generates chronological debug timeline.
@@ -74,6 +74,8 @@ An AI-powered debugging assistant for backend developers that **analyzes logs**,
 ### 🛠️ Tech Stack
 
 * **Backend**: Python, FastAPI, Redis, PostgreSQL, Kafka
+
+> Note: the repo name (`go-debug-assistant`) is historical. The current implementation is Python-only.
 * **Frontend**: React.js, Tailwind, Axios
 * **AI Models**: DeepSeek-R1-0528, Azure GPT-4o-mini
 * **Monitoring**: Prometheus, Grafana
@@ -109,10 +111,10 @@ Visit [http://localhost:3000](http://localhost:3000) for the dashboard.
 go-debug-assistant/
 ├── backend/
 │   ├── aiagent/              # AI integration modules
-│   ├── cmd/                  # Server entrypoints
+│   ├── api.py                # FastAPI entrypoint
 │   ├── config/               # API and DB config
-│   ├── internal/             # Core engine logic (correlator, analysis)
-│   └── scripts/              # Testing scripts and utilities
+│   ├── internal/             # Core engine logic (routes)
+│   └── scripts/              # Correlator + utility scripts
 ├── frontend/                 # React Dashboard
 ├── Dockerfile
 ├── docker-compose.yml
