@@ -104,5 +104,158 @@
     ],
     "expected_keywords": ["config", "environment", "staging"],
     "anti_keywords": ["memory", "auth", "deadlock"]
+  },
+  {
+    "id": "redis_eviction",
+    "logs": [
+      {"timestamp": "2026-05-06T10:10:00Z", "level": "INFO",  "trace_id": "t11", "message": "redis maxmemory=2gb policy=allkeys-lru evicted_keys_total=14821"},
+      {"timestamp": "2026-05-06T10:10:01Z", "level": "WARN",  "trace_id": "t11", "message": "session lookup miss key=sess:abc (recently active user)"},
+      {"timestamp": "2026-05-06T10:10:01Z", "level": "ERROR", "trace_id": "t11", "message": "user logged out unexpectedly: session evicted from cache"}
+    ],
+    "expected_keywords": ["redis", "eviction", "cache"],
+    "anti_keywords": ["db down", "tls", "deadlock"]
+  },
+  {
+    "id": "disk_full",
+    "logs": [
+      {"timestamp": "2026-05-06T10:11:00Z", "level": "WARN",  "trace_id": "t12", "message": "disk usage on /var/lib/postgresql=98% (47GB/48GB)"},
+      {"timestamp": "2026-05-06T10:11:01Z", "level": "ERROR", "trace_id": "t12", "message": "could not extend file pg_wal/0000003: No space left on device"},
+      {"timestamp": "2026-05-06T10:11:01Z", "level": "FATAL", "trace_id": "t12", "message": "postgres going read-only: cannot write WAL"}
+    ],
+    "expected_keywords": ["disk", "space", "full"],
+    "anti_keywords": ["auth", "rate", "memory"]
+  },
+  {
+    "id": "fd_leak",
+    "logs": [
+      {"timestamp": "2026-05-06T10:12:00Z", "level": "INFO",  "trace_id": "t13", "message": "process fd count=8192 (limit=8192)"},
+      {"timestamp": "2026-05-06T10:12:00Z", "level": "ERROR", "trace_id": "t13", "message": "OSError: [Errno 24] Too many open files: '/tmp/upload-9821.bin'"},
+      {"timestamp": "2026-05-06T10:12:00Z", "level": "ERROR", "trace_id": "t13", "message": "upload handler crashed: cannot open temp file"}
+    ],
+    "expected_keywords": ["file descriptor", "open files", "leak"],
+    "anti_keywords": ["db", "tls", "rate"]
+  },
+  {
+    "id": "env_var_missing",
+    "logs": [
+      {"timestamp": "2026-05-06T10:13:00Z", "level": "INFO",  "trace_id": "t14", "message": "service booting up commit=a1b2c3d"},
+      {"timestamp": "2026-05-06T10:13:00Z", "level": "ERROR", "trace_id": "t14", "message": "RuntimeError: missing required env var: STRIPE_SECRET_KEY"},
+      {"timestamp": "2026-05-06T10:13:00Z", "level": "FATAL", "trace_id": "t14", "message": "process exiting with code=1"}
+    ],
+    "expected_keywords": ["env", "missing", "config"],
+    "anti_keywords": ["memory", "deadlock", "tls"]
+  },
+  {
+    "id": "thread_pool_exhausted",
+    "logs": [
+      {"timestamp": "2026-05-06T10:14:00Z", "level": "WARN",  "trace_id": "t15", "message": "tomcat http-nio thread pool: active=200 queue_size=1024 max=200"},
+      {"timestamp": "2026-05-06T10:14:01Z", "level": "WARN",  "trace_id": "t15", "message": "request queued for 4200ms before dispatch"},
+      {"timestamp": "2026-05-06T10:14:02Z", "level": "ERROR", "trace_id": "t15", "message": "java.util.concurrent.RejectedExecutionException: Task rejected from ThreadPoolExecutor (queue full)"}
+    ],
+    "expected_keywords": ["thread", "pool", "exhausted"],
+    "anti_keywords": ["db", "tls", "auth"]
+  },
+  {
+    "id": "distributed_lock_contention",
+    "logs": [
+      {"timestamp": "2026-05-06T10:15:00Z", "level": "INFO",  "trace_id": "t16", "message": "acquiring redis lock key=billing:job:nightly ttl=30s"},
+      {"timestamp": "2026-05-06T10:15:30Z", "level": "WARN",  "trace_id": "t16", "message": "lock still held by holder=worker-7; retrying"},
+      {"timestamp": "2026-05-06T10:16:00Z", "level": "WARN",  "trace_id": "t16", "message": "lock still held by holder=worker-7; retrying"},
+      {"timestamp": "2026-05-06T10:16:30Z", "level": "ERROR", "trace_id": "t16", "message": "billing nightly job skipped this run: lock held >90s by another worker"}
+    ],
+    "expected_keywords": ["lock", "contention", "held"],
+    "anti_keywords": ["memory", "tls", "rate"]
+  },
+  {
+    "id": "s3_throttle",
+    "logs": [
+      {"timestamp": "2026-05-06T10:17:00Z", "level": "INFO",  "trace_id": "t17", "message": "PutObject bucket=archive key=2026/05/06/batch.parquet size=412MB"},
+      {"timestamp": "2026-05-06T10:17:01Z", "level": "WARN",  "trace_id": "t17", "message": "s3 503 SlowDown: Reduce your request rate (request_id=ABCDEF)"},
+      {"timestamp": "2026-05-06T10:17:03Z", "level": "WARN",  "trace_id": "t17", "message": "s3 503 SlowDown: Reduce your request rate (attempt 2)"},
+      {"timestamp": "2026-05-06T10:17:08Z", "level": "ERROR", "trace_id": "t17", "message": "archive upload failed after 4 retries with backoff"}
+    ],
+    "expected_keywords": ["s3", "throttle", "slowdown"],
+    "anti_keywords": ["db", "auth", "memory"]
+  },
+  {
+    "id": "migration_partial_apply",
+    "logs": [
+      {"timestamp": "2026-05-06T10:18:00Z", "level": "INFO",  "trace_id": "t18", "message": "applying migration 0042_add_currency_column.sql"},
+      {"timestamp": "2026-05-06T10:18:30Z", "level": "ERROR", "trace_id": "t18", "message": "migration 0042 step 3/5 failed: ERROR: cannot ALTER TABLE while concurrent index build active"},
+      {"timestamp": "2026-05-06T10:18:30Z", "level": "ERROR", "trace_id": "t18", "message": "schema_migrations table still pinned at 0041; database is in an inconsistent state"}
+    ],
+    "expected_keywords": ["migration", "schema", "partial"],
+    "anti_keywords": ["memory", "tls", "rate"]
+  },
+  {
+    "id": "timezone_bug",
+    "logs": [
+      {"timestamp": "2026-05-06T10:19:00Z", "level": "INFO",  "trace_id": "t19", "message": "scheduling cron job at 02:00 (server tz=UTC)"},
+      {"timestamp": "2026-05-06T10:19:01Z", "level": "WARN",  "trace_id": "t19", "message": "next run computed to be in the past: 2026-05-06T01:30:00 (DST shift not handled)"},
+      {"timestamp": "2026-05-06T10:19:01Z", "level": "ERROR", "trace_id": "t19", "message": "cron triggered twice in the same hour due to DST fallback"}
+    ],
+    "expected_keywords": ["timezone", "dst", "time"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "nan_aggregation",
+    "logs": [
+      {"timestamp": "2026-05-06T10:20:00Z", "level": "INFO",  "trace_id": "t20", "message": "computing avg latency p50 over 0 samples"},
+      {"timestamp": "2026-05-06T10:20:00Z", "level": "WARN",  "trace_id": "t20", "message": "division by zero in metric aggregation; emitting NaN"},
+      {"timestamp": "2026-05-06T10:20:01Z", "level": "ERROR", "trace_id": "t20", "message": "datadog rejected payload: 'NaN' is not a valid metric value"}
+    ],
+    "expected_keywords": ["nan", "aggregation", "division"],
+    "anti_keywords": ["db", "auth", "tls"]
+  },
+  {
+    "id": "secret_rotation_lag",
+    "logs": [
+      {"timestamp": "2026-05-06T10:21:00Z", "level": "INFO",  "trace_id": "t21", "message": "secrets manager: AWS/RDS/master rotated 02:14:33 UTC"},
+      {"timestamp": "2026-05-06T10:21:05Z", "level": "ERROR", "trace_id": "t21", "message": "FATAL: password authentication failed for user 'app'"},
+      {"timestamp": "2026-05-06T10:21:06Z", "level": "WARN",  "trace_id": "t21", "message": "service still using cached credential issued 04:00:00 UTC; not yet picked up rotation"}
+    ],
+    "expected_keywords": ["secret", "rotation", "credential"],
+    "anti_keywords": ["memory", "deadlock", "tls"]
+  },
+  {
+    "id": "backpressure_overflow",
+    "logs": [
+      {"timestamp": "2026-05-06T10:22:00Z", "level": "WARN",  "trace_id": "t22", "message": "internal queue depth=9800/10000 (98% full)"},
+      {"timestamp": "2026-05-06T10:22:01Z", "level": "WARN",  "trace_id": "t22", "message": "dropping oldest events to keep up: dropped=120"},
+      {"timestamp": "2026-05-06T10:22:02Z", "level": "ERROR", "trace_id": "t22", "message": "downstream consumer cannot keep up; backpressure -> data loss"}
+    ],
+    "expected_keywords": ["backpressure", "queue", "overflow"],
+    "anti_keywords": ["auth", "tls", "memory"]
+  },
+  {
+    "id": "slow_dns",
+    "logs": [
+      {"timestamp": "2026-05-06T10:23:00Z", "level": "INFO",  "trace_id": "t23", "message": "outbound call api.partner.example pending dns lookup"},
+      {"timestamp": "2026-05-06T10:23:04Z", "level": "WARN",  "trace_id": "t23", "message": "dns resolution took 4200ms (resolver=169.254.169.253)"},
+      {"timestamp": "2026-05-06T10:23:04Z", "level": "ERROR", "trace_id": "t23", "message": "request timed out at the http client (5s budget) — most spent in dns"}
+    ],
+    "expected_keywords": ["dns", "resolution", "lookup"],
+    "anti_keywords": ["db", "memory", "auth"]
+  },
+  {
+    "id": "circular_dep_init",
+    "logs": [
+      {"timestamp": "2026-05-06T10:24:00Z", "level": "INFO",  "trace_id": "t24", "message": "spring application starting up"},
+      {"timestamp": "2026-05-06T10:24:02Z", "level": "ERROR", "trace_id": "t24", "message": "BeanCurrentlyInCreationException: Error creating bean with name 'orderService': Requested bean is currently in creation: Is there an unresolvable circular reference?"},
+      {"timestamp": "2026-05-06T10:24:02Z", "level": "FATAL", "trace_id": "t24", "message": "application context failed to start"}
+    ],
+    "expected_keywords": ["circular", "dependency", "bean"],
+    "anti_keywords": ["memory", "tls", "rate"]
+  },
+  {
+    "id": "corrupted_payload",
+    "logs": [
+      {"timestamp": "2026-05-06T10:25:00Z", "level": "INFO",  "trace_id": "t25", "message": "consumed kafka message offset=8421 size=1.2KB"},
+      {"timestamp": "2026-05-06T10:25:00Z", "level": "ERROR", "trace_id": "t25", "message": "json.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"},
+      {"timestamp": "2026-05-06T10:25:00Z", "level": "WARN",  "trace_id": "t25", "message": "raw payload starts with bytes: 0x1f 0x8b 0x08 (looks gzipped, expected json)"},
+      {"timestamp": "2026-05-06T10:25:00Z", "level": "ERROR", "trace_id": "t25", "message": "unable to decode message; producer may have changed serialization without coordination"}
+    ],
+    "expected_keywords": ["serialization", "decode", "json"],
+    "anti_keywords": ["memory", "tls", "auth"]
   }
 ]

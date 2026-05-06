@@ -1,27 +1,44 @@
 # eval
 
-10 hand-crafted log bundles, each with a known root cause and expected/anti keywords. used to spot-check whether a prompt change makes outputs better or worse before shipping.
+25 hand-crafted log bundles, each with a known root cause and expected/anti keywords. used to spot-check whether a prompt change makes outputs better or worse before shipping.
 
 **this is not a benchmark and should not be cited as one.**
-- 10 cases is too small to claim accuracy. it's a smoke test.
+- 25 cases is small. it spots regressions, it does not measure accuracy.
 - keyword scoring is brittle: it rewards correct *vocabulary* in the answer, not correct *understanding*.
 - anti-keywords catch obvious wrong directions but miss subtle errors.
 
 ## what it's actually good for
 
-- comparing two prompt versions on the same dataset and seeing which scores higher.
-- catching regressions when refactoring `llm.py` or `prompts`.
+- comparing two prompt versions on the same dataset and seeing which scores higher (a/b).
+- catching regressions when refactoring `llm.py`, `backend/prompts/*`, or the correlator.
 - demonstrating that the project has an evaluation mindset, not just vibes.
+
+## prompt versions
+
+prompts live in `backend/prompts/v{N}.py` and are registered in `backend/prompts/__init__.py`. versions are append-only — never edit a published version, add a new one and switch via `PROMPT_VERSION` env var.
+
+current versions:
+- `v1` — original. `root_cause`, `next_step`, `evidence` fields.
+- `v2` — adds `category` (db|auth|network|memory|config|upstream|cache|kafka|other) and `confidence` (high|medium|low). default since 0.5.
 
 ## run
 
 ```bash
-# requires real azure openai credentials in .env
-python -m eval.run_eval
-python -m eval.run_eval --case db_timeout
+# defaults to PROMPT_VERSION env var (v2)
+python -m eval.run_eval                      # writes eval/results-v2.json
+python -m eval.run_eval --version v1         # writes eval/results-v1.json
+python -m eval.run_eval --case db_timeout    # one case
 ```
 
-writes `eval/results.json` with per-case scores + aggregate.
+## a/b compare
+
+```bash
+python -m eval.run_eval --version v1
+python -m eval.run_eval --version v2
+python -m eval.compare eval/results-v1.json eval/results-v2.json
+```
+
+prints a per-case delta + aggregate side-by-side. arrows mark cases where one version scored at least 0.05 higher than the other.
 
 ## scoring
 
@@ -32,12 +49,11 @@ case_score   = 0.7 * keyword_hit + 0.3 * anti_clean
 aggregate    = mean(case_score) across successful cases
 ```
 
-a case is "passing" if `case_score >= 0.7`. the aggregate number is a single coarse signal — look at per-case results to see what's actually failing.
+a case is "passing" if `case_score >= 0.7`. look at per-case results, not just the aggregate.
 
-## what's missing (deliberate, not pretending otherwise)
+## what's still missing (deliberate, not pretending)
 
-- larger labeled set (50+ cases needed for any real claim)
-- structured outputs scored against fields (root_cause, suggested_action) not free text
-- side-by-side prompt comparison report
-- agreement metric across multiple llm runs (same case, same prompt, multiple seeds)
-- gold-standard analyses written by a human, scored via embedding similarity instead of keyword match
+- 50+ cases would let you make a real claim. 25 lets you spot regressions, not measure accuracy.
+- structured outputs scored against named fields (root_cause, category) instead of free text.
+- agreement metric across multiple llm runs (same case, same prompt, multiple seeds).
+- gold-standard analyses written by a human, scored via embedding similarity instead of keyword match.
