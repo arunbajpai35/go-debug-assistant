@@ -1,7 +1,7 @@
 import json
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import psycopg2
 from psycopg2.pool import SimpleConnectionPool

@@ -1,5 +1,7 @@
 # debug-assistant
 
+[![ci](https://github.com/arunbajpai35/go-debug-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/arunbajpai35/go-debug-assistant/actions/workflows/ci.yml)
+
 a small log-triage backend. ingests structured logs from kafka or http, correlates them by trace id within a sliding time window, and asks an llm for a one-line root-cause hypothesis per correlated bundle. results are persisted in postgres and exposed over a tiny api. prometheus metrics on the way in and out.
 
 repo name is `go-debug-assistant` for historical reasons; the implementation is python.
@@ -65,6 +67,7 @@ services:
 quick check:
 ```bash
 curl -s localhost:8000/healthz
+curl -s localhost:8000/readyz
 curl -s localhost:8000/metrics | head
 curl -s -X POST localhost:8000/analyze \
   -H 'content-type: application/json' \
@@ -72,15 +75,14 @@ curl -s -X POST localhost:8000/analyze \
 curl -s localhost:8000/analysis/t1
 ```
 
-## kafka producer (sample)
+interactive openapi docs at `http://localhost:8000/docs`.
 
-```python
-from kafka import KafkaProducer
-import json
+## try the kafka path
 
-p = KafkaProducer(bootstrap_servers="localhost:29092", value_serializer=lambda v: json.dumps(v).encode())
-p.send("debug.logs", {"timestamp": "2026-05-06T10:00:00Z", "level": "ERROR", "message": "db timeout", "trace_id": "t1"})
-p.flush()
+```bash
+python scripts/produce_sample.py --traces 3 --count 10
+# worker picks up messages, buffers per trace, flushes when idle for WINDOW_SECONDS
+docker compose -f docker/docker-compose.yml logs -f worker
 ```
 
 ## run tests

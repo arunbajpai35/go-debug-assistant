@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -24,7 +25,7 @@ class AnalyzeRequest(BaseModel):
     window_seconds: int | None = None
 
 
-app = FastAPI(title="debug-assistant", version="0.2.0")
+app = FastAPI(title="debug-assistant", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,18 +54,31 @@ def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/readyz")
+def readyz() -> Response:
+    try:
+        with db.conn() as c, c.cursor() as cur:
+            cur.execute("select 1")
+            cur.fetchone()
+    except Exception as e:
+        log.warning("readyz failed: %s", e)
+        return Response('{"ok":false,"db":"down"}', media_type="application/json", status_code=503)
+    return Response('{"ok":true}', media_type="application/json")
+
+
 @app.get("/metrics")
 def prom_metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/analyze")
-def analyze(req: AnalyzeRequest) -> dict:
+async def analyze(req: AnalyzeRequest) -> dict:
     if len(req.logs) > MAX_LOGS_PER_REQUEST:
         raise HTTPException(413, f"too many logs (max {MAX_LOGS_PER_REQUEST})")
     metrics.logs_ingested.labels(source="http").inc(len(req.logs))
     window = req.window_seconds or WINDOW_SECONDS
-    results = pipeline.process([l.model_dump() for l in req.logs], window_seconds=window)
+    payload = [entry.model_dump() for entry in req.logs]
+    results = await run_in_threadpool(pipeline.process, payload, window)
     return {"results": results, "count": len(results)}
 
 
