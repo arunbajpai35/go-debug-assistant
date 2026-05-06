@@ -25,7 +25,11 @@ DB_NAME = _env("DB_NAME", "debug_logs")
 
 KAFKA_BROKERS = _env("KAFKA_BROKERS", "localhost:9092")
 KAFKA_TOPIC = _env("KAFKA_TOPIC", "debug.logs")
+KAFKA_DLQ_TOPIC = _env("KAFKA_DLQ_TOPIC", "debug.logs.dlq")
 KAFKA_GROUP = _env("KAFKA_GROUP", "debug-assistant")
+KAFKA_BATCH_MAX = int(_env("KAFKA_BATCH_MAX", "200"))
+KAFKA_FLUSH_IDLE_SECONDS = int(_env("KAFKA_FLUSH_IDLE_SECONDS", "60"))
+KAFKA_MAX_BUNDLE_RETRIES = int(_env("KAFKA_MAX_BUNDLE_RETRIES", "3"))
 
 CORS_ORIGINS = [o.strip() for o in _env("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
