@@ -1,5 +1,5 @@
 # --- builder: compiles wheels for c-extension deps in a throwaway image ---
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,7 +15,7 @@ RUN pip wheel -r requirements.txt -w /wheels
 
 
 # --- runtime: no compiler, no headers; just python + the prebuilt wheels ---
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
