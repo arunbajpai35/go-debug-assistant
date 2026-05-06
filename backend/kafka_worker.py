@@ -28,7 +28,7 @@ from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 
-from backend import db, metrics, pipeline, tracing
+from backend import db, log_setup, metrics, pipeline, tracing
 from backend.config import (
     KAFKA_BATCH_MAX,
     KAFKA_BROKERS,
@@ -169,7 +169,7 @@ def _flush(
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    log_setup.configure()
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
     while _running:
