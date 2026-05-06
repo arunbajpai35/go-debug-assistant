@@ -9,7 +9,11 @@ log = logging.getLogger(__name__)
 
 
 def process(logs: list[dict], window_seconds: int) -> list[dict]:
-    """correlate → llm → persist. returns one result per trace bundle."""
+    """correlate → llm → persist. returns one result per trace bundle.
+
+    persistence is batched into a single insert at the end so wide bundle
+    counts don't pay N round-trips to postgres.
+    """
     with tracer.start_as_current_span("pipeline.process") as root:
         root.set_attribute("logs.count", len(logs))
         root.set_attribute("window.seconds", window_seconds)
@@ -20,6 +24,7 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
         root.set_attribute("bundles.count", len(bundles))
 
         results: list[dict] = []
+        rows: list[tuple[str, str, str, str]] = []
         for trace_id, bundle in bundles.items():
             with tracer.start_as_current_span("process_bundle") as span:
                 span.set_attribute("trace_id", trace_id)
@@ -37,13 +42,7 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
                     log.exception("llm analyze failed trace_id=%s", trace_id)
                     continue
 
-                try:
-                    with tracer.start_as_current_span("db.save_analysis"):
-                        db.save_analysis(trace_id, text, analysis, model)
-                        metrics.analyses_persisted.inc()
-                except Exception:
-                    log.exception("db save failed trace_id=%s", trace_id)
-
+                rows.append((trace_id, text, analysis, model))
                 results.append(
                     {
                         "trace_id": trace_id,
@@ -52,4 +51,14 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
                         "model": model,
                     }
                 )
+
+        if rows:
+            try:
+                with tracer.start_as_current_span("db.save_analyses_batch") as span:
+                    span.set_attribute("rows", len(rows))
+                    db.save_analyses_batch(rows)
+                    metrics.analyses_persisted.inc(len(rows))
+            except Exception:
+                log.exception("batch save failed rows=%d", len(rows))
+
         return results
