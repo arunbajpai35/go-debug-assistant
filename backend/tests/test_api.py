@@ -118,3 +118,42 @@ def test_get_analysis_returns_row_when_present(client):
         r = client.get("/analysis/t1")
     assert r.status_code == 200
     assert r.json() == row
+
+
+def test_unhandled_exception_returns_500_with_request_id_and_no_traceback():
+    """generic exception handler. body must be json with request_id, no stack trace leaked.
+    a separate TestClient is used with raise_server_exceptions=False so exceptions reach the
+    handler instead of being re-raised in the test."""
+    with (
+        patch("backend.db.init_pool"),
+        patch("backend.db.close_pool", AsyncMock()),
+    ):
+        from backend.api import app
+
+        with (
+            TestClient(app, raise_server_exceptions=False) as c,
+            patch("backend.api.db.get_analysis", AsyncMock(side_effect=RuntimeError("boom"))),
+        ):
+            r = c.get("/analysis/t1", headers={"x-request-id": "rid-500"})
+    assert r.status_code == 500
+    body = r.json()
+    assert body["detail"] == "internal error"
+    assert body["request_id"] == "rid-500"
+    assert "Traceback" not in r.text
+    assert "RuntimeError" not in r.text
+
+
+def test_cors_preflight_respects_configured_methods(client):
+    r = client.options(
+        "/analyze",
+        headers={
+            "origin": "http://localhost:3000",
+            "access-control-request-method": "POST",
+            "access-control-request-headers": "content-type",
+        },
+    )
+    assert r.status_code == 200
+    # only the configured methods should be advertised
+    allowed = r.headers.get("access-control-allow-methods", "")
+    assert "POST" in allowed
+    assert "DELETE" not in allowed

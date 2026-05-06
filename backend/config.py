@@ -33,6 +33,8 @@ KAFKA_FLUSH_IDLE_SECONDS = int(_env("KAFKA_FLUSH_IDLE_SECONDS", "60"))
 KAFKA_MAX_BUNDLE_RETRIES = int(_env("KAFKA_MAX_BUNDLE_RETRIES", "3"))
 
 CORS_ORIGINS = [o.strip() for o in _env("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
+CORS_ALLOW_METHODS = [m.strip() for m in _env("CORS_ALLOW_METHODS", "GET,POST,OPTIONS").split(",") if m.strip()]
+CORS_ALLOW_HEADERS = [h.strip() for h in _env("CORS_ALLOW_HEADERS", "content-type,x-request-id").split(",") if h.strip()]
 
 # distributed state for rate limit + budget when running >1 replica.
 # unset = in-memory (single-replica only).

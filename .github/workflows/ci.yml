@@ -64,3 +64,20 @@ jobs:
         run: |
           python scripts/dump_openapi.py > /tmp/openapi.new.json
           diff -u openapi.json /tmp/openapi.new.json
+
+  image-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: build runtime image
+        run: docker build -f docker/Dockerfile -t debug-assistant:ci .
+      - name: trivy scan (HIGH/CRITICAL only, fails on findings)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: debug-assistant:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          vuln-type: os,library
