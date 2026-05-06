@@ -1,0 +1,57 @@
+# overlay compose file for the observability stack: otel-collector receives traces from
+# the api + worker, prometheus scrapes /metrics, grafana renders both.
+#
+# usage:
+#   docker compose -f docker/docker-compose.yml -f docker/observability.yml up
+#
+# what it adds:
+#   otel-collector  (4317 grpc OTLP)
+#   prometheus      (9090 ui + scrape)
+#   grafana         (3001 ui, datasources auto-provisioned)
+#
+# the api + worker get OTEL_EXPORTER_OTLP_ENDPOINT pointed at the collector here, so
+# spans flow without changing app code.
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP grpc
+      - "8889:8889"   # collector's own /metrics scrape target
+
+  prometheus:
+    image: prom/prometheus:v3.0.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana-oss:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+  worker:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"

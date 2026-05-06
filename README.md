@@ -8,25 +8,34 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 
 ## what this is
 
+```mermaid
+flowchart LR
+    P[producers<br/>any service] -->|publish| K[(kafka<br/>debug.logs)]
+    K --> W[kafka_worker<br/>buffer per trace_id<br/>flush on batch or idle]
+    H[POST /analyze<br/>http client] --> A[fastapi]
+    W --> PIPE[pipeline.process]
+    A --> PIPE
+    PIPE --> CORR[correlator<br/>sliding window<br/>group by trace_id]
+    CORR --> LLM[azure openai<br/>structured json<br/>circuit breaker + budget]
+    LLM --> DB[(postgres<br/>analyses + raw_logs<br/>partitioned by month)]
+    DB --> G[GET /analysis/:trace_id]
+    PIPE -->|metrics| PROM[/prometheus /metrics/]
+    PIPE -->|spans| OTEL[/otel collector/]
+    classDef store fill:#fef9c3,stroke:#a16207
+    classDef edge fill:#dbeafe,stroke:#1d4ed8
+    class K,DB store
+    class P,H edge
 ```
-                                  +--------------+
-   producers --> debug.logs  -->  | kafka_worker |  --+
-   (any service)   topic          +--------------+    |
-                                                      v
-   POST /analyze (http) ----------------------+--->  pipeline
-                                              |       |
-                                              |       | 1. correlator: group by trace_id, expand each
-                                              |       |    trace's window by +/- WINDOW_SECONDS,
-                                              |       |    pull neighbour logs from the same window
-                                              |       |
-                                              |       | 2. llm: one azure openai call per bundle,
-                                              |       |    timeout + retry on rate limits
-                                              |       |
-                                              |       v
-                                              +---> postgres (analyses, raw_logs)
-                                                      |
-   GET /analysis/{trace_id}  <-----------------------+
-   GET /metrics  -- prometheus counters + latency histogram
+
+text version of the same flow:
+
+```
+producers ─► kafka.debug.logs ─► kafka_worker ─┐
+                                                ├─► pipeline ─► correlator ─► llm ─► postgres
+http POST /analyze ────────────────────────────┘
+GET /analysis/{trace_id} ◄── postgres
+GET /metrics              ── prometheus counters + latency histogram
+GET /docs                 ── interactive openapi
 ```
 
 ## stack
@@ -136,7 +145,7 @@ curl -s -X POST localhost:8000/analyze \
 curl -s localhost:8000/analysis/t1
 ```
 
-interactive openapi docs at `http://localhost:8000/docs`. the static spec is also committed at `openapi.json` (regenerate via `python scripts/dump_openapi.py > openapi.json`; ci fails on a stale spec).
+interactive openapi docs at `http://localhost:8000/docs`. the static spec is also committed at `openapi.json` (regenerate via `python scripts/dump_openapi.py > openapi.json`; ci fails on a stale spec). longer-form docs in `docs/` (mkdocs site: `pip install mkdocs mkdocs-material && mkdocs serve`).
 
 other endpoints worth knowing:
 - `/healthz` — liveness
