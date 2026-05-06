@@ -1,13 +1,9 @@
-# Runtime (FastAPI app + AI agents)
 fastapi==0.116.1
 uvicorn==0.35.0
 pydantic==2.11.7
 python-dotenv==1.1.1
 openai==1.97.0
-redis==6.2.0
-
-# Experimental scripts under backend/scripts/ only — not part of the API runtime.
-# Drop these once the scripts are removed or rewritten.
 psycopg2-binary==2.9.10
 kafka-python==2.2.15
-together==1.5.21
+prometheus-client==0.20.0
+pytest==8.3.3

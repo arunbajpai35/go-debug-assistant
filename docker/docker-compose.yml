@@ -4,8 +4,6 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -14,7 +12,10 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
@@ -30,12 +31,56 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d debug_logs"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  redis:
-    image: redis:7
-    restart: always
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: debug_logs
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: debug.logs
+      CORS_ORIGINS: http://localhost:3000
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "-m", "backend.kafka_worker"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: debug_logs
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: debug.logs
+      KAFKA_GROUP: debug-assistant
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}
+    depends_on:
+      kafka:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
