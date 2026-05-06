@@ -124,7 +124,14 @@ curl -s -X POST localhost:8000/analyze \
 curl -s localhost:8000/analysis/t1
 ```
 
-interactive openapi docs at `http://localhost:8000/docs`.
+interactive openapi docs at `http://localhost:8000/docs`. the static spec is also committed at `openapi.json` (regenerate via `python scripts/dump_openapi.py > openapi.json`; ci fails on a stale spec).
+
+other endpoints worth knowing:
+- `/healthz` — liveness
+- `/readyz` — readiness (db ping)
+- `/metrics` — prometheus
+- `/version` — git sha, build date, app version (set at docker build time)
+- `/budget` — current daily llm spend / remaining
 
 ## try the kafka path
 

@@ -64,7 +64,8 @@ class JsonFormatter(logging.Formatter):
 def configure(level: str | int = "INFO") -> None:
     """install the json formatter on the root logger. idempotent."""
     fmt = os.getenv("LOG_FORMAT", "json").lower()
-    handler = logging.StreamHandler(sys.stdout)
+    # logs go to stderr so stdout is free for actual program output (e.g. dumping openapi.json).
+    handler = logging.StreamHandler(sys.stderr)
     if fmt == "text":
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     else:
