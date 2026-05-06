@@ -5,6 +5,7 @@ windows_correlated = Counter("windows_correlated_total", "correlated windows pro
 llm_calls = Counter("llm_calls_total", "llm calls made", ["status"])
 llm_latency = Histogram("llm_latency_seconds", "llm call latency", buckets=(0.5, 1, 2, 5, 10, 20, 30, 60))
 analyses_persisted = Counter("analyses_persisted_total", "analyses written to postgres")
+raw_logs_persisted = Counter("raw_logs_persisted_total", "raw log records written to postgres")
 
 bundle_retries = Counter("bundle_retries_total", "bundle re-flush attempts after a failure")
 bundles_dlq = Counter("bundles_dlq_total", "bundles shipped to dead-letter topic after exceeding retry budget")

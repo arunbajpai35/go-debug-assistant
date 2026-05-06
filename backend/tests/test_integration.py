@@ -65,3 +65,29 @@ def test_readyz_against_real_db(app_client):
     r = app_client.get("/readyz")
     assert r.status_code == 200
     assert r.json() == {"ok": True}
+
+
+def test_raw_logs_persisted_during_analyze(app_client):
+    """/analyze should persist input logs to raw_logs (independently of the llm step)."""
+    from backend import db
+
+    with patch("backend.pipeline.llm.analyze", return_value=("stub", "stub-model", "v2")):
+        post = app_client.post(
+            "/analyze",
+            json={
+                "logs": [
+                    {
+                        "timestamp": "2026-05-06T11:00:00Z",
+                        "level": "WARN",
+                        "message": "raw logs round-trip",
+                        "trace_id": "raw-int-1",
+                    }
+                ]
+            },
+        )
+    assert post.status_code == 200
+
+    with db.conn() as c, c.cursor() as cur:
+        cur.execute("select count(*) from raw_logs where trace_id = %s", ("raw-int-1",))
+        count = cur.fetchone()[0]
+    assert count == 1
