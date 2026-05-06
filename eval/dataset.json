@@ -2,510 +2,1752 @@
   {
     "id": "db_timeout",
     "logs": [
-      {"timestamp": "2026-05-06T10:00:00Z", "level": "INFO",  "trace_id": "t1", "message": "POST /checkout received user_id=42"},
-      {"timestamp": "2026-05-06T10:00:01Z", "level": "WARN",  "trace_id": "t1", "message": "db connection acquire took 2400ms"},
-      {"timestamp": "2026-05-06T10:00:03Z", "level": "ERROR", "trace_id": "t1", "message": "psycopg2.OperationalError: timeout expired after 5000ms while waiting for db connection"},
-      {"timestamp": "2026-05-06T10:00:03Z", "level": "ERROR", "trace_id": "t1", "message": "checkout failed: db_unreachable"}
+      {
+        "timestamp": "2026-05-06T10:00:00Z",
+        "level": "INFO",
+        "trace_id": "t1",
+        "message": "POST /checkout received user_id=42"
+      },
+      {
+        "timestamp": "2026-05-06T10:00:01Z",
+        "level": "WARN",
+        "trace_id": "t1",
+        "message": "db connection acquire took 2400ms"
+      },
+      {
+        "timestamp": "2026-05-06T10:00:03Z",
+        "level": "ERROR",
+        "trace_id": "t1",
+        "message": "psycopg2.OperationalError: timeout expired after 5000ms while waiting for db connection"
+      },
+      {
+        "timestamp": "2026-05-06T10:00:03Z",
+        "level": "ERROR",
+        "trace_id": "t1",
+        "message": "checkout failed: db_unreachable"
+      }
     ],
-    "expected_keywords": ["db", "timeout", "connection"],
-    "anti_keywords": ["auth", "rate", "memory"]
+    "expected_keywords": [
+      "db",
+      "timeout",
+      "connection"
+    ],
+    "anti_keywords": [
+      "auth",
+      "rate",
+      "memory"
+    ],
+    "gold": "the postgres connection pool is unable to hand out connections within 5 seconds; the checkout request fails because the database is unreachable or saturated. action: check the db pool size, the postgres server load, and any network path between the app and the database."
   },
   {
     "id": "expired_token",
     "logs": [
-      {"timestamp": "2026-05-06T10:01:00Z", "level": "INFO",  "trace_id": "t2", "message": "GET /me started"},
-      {"timestamp": "2026-05-06T10:01:00Z", "level": "DEBUG", "trace_id": "t2", "message": "verifying jwt iss=auth.example exp=2026-05-06T09:55:00Z"},
-      {"timestamp": "2026-05-06T10:01:00Z", "level": "ERROR", "trace_id": "t2", "message": "jwt validation failed: token expired"},
-      {"timestamp": "2026-05-06T10:01:00Z", "level": "WARN",  "trace_id": "t2", "message": "returning 401 to client"}
+      {
+        "timestamp": "2026-05-06T10:01:00Z",
+        "level": "INFO",
+        "trace_id": "t2",
+        "message": "GET /me started"
+      },
+      {
+        "timestamp": "2026-05-06T10:01:00Z",
+        "level": "DEBUG",
+        "trace_id": "t2",
+        "message": "verifying jwt iss=auth.example exp=2026-05-06T09:55:00Z"
+      },
+      {
+        "timestamp": "2026-05-06T10:01:00Z",
+        "level": "ERROR",
+        "trace_id": "t2",
+        "message": "jwt validation failed: token expired"
+      },
+      {
+        "timestamp": "2026-05-06T10:01:00Z",
+        "level": "WARN",
+        "trace_id": "t2",
+        "message": "returning 401 to client"
+      }
     ],
-    "expected_keywords": ["token", "expired"],
-    "anti_keywords": ["db", "timeout", "memory"]
+    "expected_keywords": [
+      "token",
+      "expired"
+    ],
+    "anti_keywords": [
+      "db",
+      "timeout",
+      "memory"
+    ],
+    "gold": "the jwt presented by the client has an exp timestamp in the past, so the auth middleware rejects it and the request is returned as 401. action: ensure the client refreshes its token before expiry; verify clock sync between issuer and verifier."
   },
   {
     "id": "rate_limit_upstream",
     "logs": [
-      {"timestamp": "2026-05-06T10:02:00Z", "level": "INFO",  "trace_id": "t3", "message": "POST /search forwarded to elasticsearch"},
-      {"timestamp": "2026-05-06T10:02:01Z", "level": "WARN",  "trace_id": "t3", "message": "elasticsearch returned 429 retry_after=1"},
-      {"timestamp": "2026-05-06T10:02:02Z", "level": "WARN",  "trace_id": "t3", "message": "elasticsearch returned 429 retry_after=2"},
-      {"timestamp": "2026-05-06T10:02:04Z", "level": "ERROR", "trace_id": "t3", "message": "search aborted: upstream rate limit exhausted after 3 retries"}
+      {
+        "timestamp": "2026-05-06T10:02:00Z",
+        "level": "INFO",
+        "trace_id": "t3",
+        "message": "POST /search forwarded to elasticsearch"
+      },
+      {
+        "timestamp": "2026-05-06T10:02:01Z",
+        "level": "WARN",
+        "trace_id": "t3",
+        "message": "elasticsearch returned 429 retry_after=1"
+      },
+      {
+        "timestamp": "2026-05-06T10:02:02Z",
+        "level": "WARN",
+        "trace_id": "t3",
+        "message": "elasticsearch returned 429 retry_after=2"
+      },
+      {
+        "timestamp": "2026-05-06T10:02:04Z",
+        "level": "ERROR",
+        "trace_id": "t3",
+        "message": "search aborted: upstream rate limit exhausted after 3 retries"
+      }
     ],
-    "expected_keywords": ["rate", "limit", "429"],
-    "anti_keywords": ["db", "auth", "memory"]
+    "expected_keywords": [
+      "rate",
+      "limit",
+      "429"
+    ],
+    "anti_keywords": [
+      "db",
+      "auth",
+      "memory"
+    ],
+    "gold": "elasticsearch is rate-limiting the service with repeated 429 responses; after 3 retries the search request is aborted. action: lower the request rate, add jitter and exponential backoff, or request a higher rate limit from the upstream."
   },
   {
     "id": "oom_kill",
     "logs": [
-      {"timestamp": "2026-05-06T10:03:00Z", "level": "INFO",  "trace_id": "t4", "message": "loading 200k rows for analytics export"},
-      {"timestamp": "2026-05-06T10:03:08Z", "level": "WARN",  "trace_id": "t4", "message": "memory usage 92% rss=3.6GB"},
-      {"timestamp": "2026-05-06T10:03:10Z", "level": "ERROR", "trace_id": "t4", "message": "MemoryError: cannot allocate buffer"},
-      {"timestamp": "2026-05-06T10:03:10Z", "level": "FATAL", "trace_id": "t4", "message": "process killed by oom-killer signal=9"}
+      {
+        "timestamp": "2026-05-06T10:03:00Z",
+        "level": "INFO",
+        "trace_id": "t4",
+        "message": "loading 200k rows for analytics export"
+      },
+      {
+        "timestamp": "2026-05-06T10:03:08Z",
+        "level": "WARN",
+        "trace_id": "t4",
+        "message": "memory usage 92% rss=3.6GB"
+      },
+      {
+        "timestamp": "2026-05-06T10:03:10Z",
+        "level": "ERROR",
+        "trace_id": "t4",
+        "message": "MemoryError: cannot allocate buffer"
+      },
+      {
+        "timestamp": "2026-05-06T10:03:10Z",
+        "level": "FATAL",
+        "trace_id": "t4",
+        "message": "process killed by oom-killer signal=9"
+      }
     ],
-    "expected_keywords": ["memory", "oom"],
-    "anti_keywords": ["db", "rate", "token"]
+    "expected_keywords": [
+      "memory",
+      "oom"
+    ],
+    "anti_keywords": [
+      "db",
+      "rate",
+      "token"
+    ],
+    "gold": "the process tried to load 200k rows into memory which pushed rss past the container limit and the linux oom-killer terminated it. action: stream the export instead of loading it all into memory, or raise the container memory limit if streaming is impractical."
   },
   {
     "id": "stale_cache",
     "logs": [
-      {"timestamp": "2026-05-06T10:04:00Z", "level": "INFO",  "trace_id": "t5", "message": "GET /price?sku=abc -> 99.00 (cache hit)"},
-      {"timestamp": "2026-05-06T10:04:02Z", "level": "WARN",  "trace_id": "t5", "message": "checkout total 99.00 mismatch with current price 129.00 from db"},
-      {"timestamp": "2026-05-06T10:04:02Z", "level": "ERROR", "trace_id": "t5", "message": "price_inconsistency: cached_price=99.00 db_price=129.00 sku=abc"}
+      {
+        "timestamp": "2026-05-06T10:04:00Z",
+        "level": "INFO",
+        "trace_id": "t5",
+        "message": "GET /price?sku=abc -> 99.00 (cache hit)"
+      },
+      {
+        "timestamp": "2026-05-06T10:04:02Z",
+        "level": "WARN",
+        "trace_id": "t5",
+        "message": "checkout total 99.00 mismatch with current price 129.00 from db"
+      },
+      {
+        "timestamp": "2026-05-06T10:04:02Z",
+        "level": "ERROR",
+        "trace_id": "t5",
+        "message": "price_inconsistency: cached_price=99.00 db_price=129.00 sku=abc"
+      }
     ],
-    "expected_keywords": ["cache", "stale", "price"],
-    "anti_keywords": ["db down", "rate", "memory"]
+    "expected_keywords": [
+      "cache",
+      "stale",
+      "price"
+    ],
+    "anti_keywords": [
+      "db down",
+      "rate",
+      "memory"
+    ],
+    "gold": "the cache returned a price that is now out of date relative to the database; checkout used the stale cached value while the source of truth had moved on. action: invalidate the price cache on update and shorten ttl for price entries."
   },
   {
     "id": "missing_index",
     "logs": [
-      {"timestamp": "2026-05-06T10:05:00Z", "level": "INFO",  "trace_id": "t6", "message": "GET /orders?user_id=42 started"},
-      {"timestamp": "2026-05-06T10:05:08Z", "level": "WARN",  "trace_id": "t6", "message": "slow query 8200ms: SELECT * FROM orders WHERE user_id=42 ORDER BY created_at DESC"},
-      {"timestamp": "2026-05-06T10:05:08Z", "level": "WARN",  "trace_id": "t6", "message": "EXPLAIN: Seq Scan on orders rows=12000000"},
-      {"timestamp": "2026-05-06T10:05:08Z", "level": "INFO",  "trace_id": "t6", "message": "GET /orders -> 200 8205ms"}
+      {
+        "timestamp": "2026-05-06T10:05:00Z",
+        "level": "INFO",
+        "trace_id": "t6",
+        "message": "GET /orders?user_id=42 started"
+      },
+      {
+        "timestamp": "2026-05-06T10:05:08Z",
+        "level": "WARN",
+        "trace_id": "t6",
+        "message": "slow query 8200ms: SELECT * FROM orders WHERE user_id=42 ORDER BY created_at DESC"
+      },
+      {
+        "timestamp": "2026-05-06T10:05:08Z",
+        "level": "WARN",
+        "trace_id": "t6",
+        "message": "EXPLAIN: Seq Scan on orders rows=12000000"
+      },
+      {
+        "timestamp": "2026-05-06T10:05:08Z",
+        "level": "INFO",
+        "trace_id": "t6",
+        "message": "GET /orders -> 200 8205ms"
+      }
     ],
-    "expected_keywords": ["index", "scan", "slow"],
-    "anti_keywords": ["auth", "memory", "rate"]
+    "expected_keywords": [
+      "index",
+      "scan",
+      "slow"
+    ],
+    "anti_keywords": [
+      "auth",
+      "memory",
+      "rate"
+    ],
+    "gold": "the orders query is doing a sequential scan of 12 million rows because there is no usable index on user_id; this is the cause of the 8s latency. action: add an index on (user_id, created_at desc) and verify the planner uses it."
   },
   {
     "id": "deadlock",
     "logs": [
-      {"timestamp": "2026-05-06T10:06:00Z", "level": "INFO",  "trace_id": "t7", "message": "txn-A: UPDATE accounts SET bal=bal-10 WHERE id=1"},
-      {"timestamp": "2026-05-06T10:06:00Z", "level": "INFO",  "trace_id": "t7", "message": "txn-B: UPDATE accounts SET bal=bal-5 WHERE id=2"},
-      {"timestamp": "2026-05-06T10:06:01Z", "level": "INFO",  "trace_id": "t7", "message": "txn-A: UPDATE accounts SET bal=bal+10 WHERE id=2 (waiting)"},
-      {"timestamp": "2026-05-06T10:06:01Z", "level": "ERROR", "trace_id": "t7", "message": "psycopg2.errors.DeadlockDetected: deadlock detected; rolling back txn-A"}
+      {
+        "timestamp": "2026-05-06T10:06:00Z",
+        "level": "INFO",
+        "trace_id": "t7",
+        "message": "txn-A: UPDATE accounts SET bal=bal-10 WHERE id=1"
+      },
+      {
+        "timestamp": "2026-05-06T10:06:00Z",
+        "level": "INFO",
+        "trace_id": "t7",
+        "message": "txn-B: UPDATE accounts SET bal=bal-5 WHERE id=2"
+      },
+      {
+        "timestamp": "2026-05-06T10:06:01Z",
+        "level": "INFO",
+        "trace_id": "t7",
+        "message": "txn-A: UPDATE accounts SET bal=bal+10 WHERE id=2 (waiting)"
+      },
+      {
+        "timestamp": "2026-05-06T10:06:01Z",
+        "level": "ERROR",
+        "trace_id": "t7",
+        "message": "psycopg2.errors.DeadlockDetected: deadlock detected; rolling back txn-A"
+      }
     ],
-    "expected_keywords": ["deadlock", "txn"],
-    "anti_keywords": ["memory", "rate", "auth"]
+    "expected_keywords": [
+      "deadlock",
+      "txn"
+    ],
+    "anti_keywords": [
+      "memory",
+      "rate",
+      "auth"
+    ],
+    "gold": "two concurrent transactions are updating the same accounts rows in opposite order and postgres detected a deadlock; one transaction was rolled back. action: enforce a consistent lock ordering across all account-mutating transactions."
   },
   {
     "id": "tls_cert_expired",
     "logs": [
-      {"timestamp": "2026-05-06T10:07:00Z", "level": "INFO",  "trace_id": "t8", "message": "outbound POST https://payments.partner.example/charge"},
-      {"timestamp": "2026-05-06T10:07:00Z", "level": "ERROR", "trace_id": "t8", "message": "ssl.SSLCertVerificationError: certificate has expired (_ssl.c:1006)"},
-      {"timestamp": "2026-05-06T10:07:00Z", "level": "ERROR", "trace_id": "t8", "message": "charge failed: tls verification"}
+      {
+        "timestamp": "2026-05-06T10:07:00Z",
+        "level": "INFO",
+        "trace_id": "t8",
+        "message": "outbound POST https://payments.partner.example/charge"
+      },
+      {
+        "timestamp": "2026-05-06T10:07:00Z",
+        "level": "ERROR",
+        "trace_id": "t8",
+        "message": "ssl.SSLCertVerificationError: certificate has expired (_ssl.c:1006)"
+      },
+      {
+        "timestamp": "2026-05-06T10:07:00Z",
+        "level": "ERROR",
+        "trace_id": "t8",
+        "message": "charge failed: tls verification"
+      }
     ],
-    "expected_keywords": ["tls", "certificate", "expired"],
-    "anti_keywords": ["db", "memory", "rate"]
+    "expected_keywords": [
+      "tls",
+      "certificate",
+      "expired"
+    ],
+    "anti_keywords": [
+      "db",
+      "memory",
+      "rate"
+    ],
+    "gold": "the partner's tls certificate has expired so outbound https calls to payments.partner.example fail at handshake. action: contact the partner to rotate the cert; in the meantime no charges will succeed."
   },
   {
     "id": "kafka_lag",
     "logs": [
-      {"timestamp": "2026-05-06T10:08:00Z", "level": "INFO",  "trace_id": "t9", "message": "consumer lag topic=orders partition=0 lag=42000"},
-      {"timestamp": "2026-05-06T10:08:30Z", "level": "WARN",  "trace_id": "t9", "message": "consumer lag topic=orders partition=0 lag=58000 (growing)"},
-      {"timestamp": "2026-05-06T10:08:30Z", "level": "WARN",  "trace_id": "t9", "message": "downstream sla breach: orders processing latency p99=42s"}
+      {
+        "timestamp": "2026-05-06T10:08:00Z",
+        "level": "INFO",
+        "trace_id": "t9",
+        "message": "consumer lag topic=orders partition=0 lag=42000"
+      },
+      {
+        "timestamp": "2026-05-06T10:08:30Z",
+        "level": "WARN",
+        "trace_id": "t9",
+        "message": "consumer lag topic=orders partition=0 lag=58000 (growing)"
+      },
+      {
+        "timestamp": "2026-05-06T10:08:30Z",
+        "level": "WARN",
+        "trace_id": "t9",
+        "message": "downstream sla breach: orders processing latency p99=42s"
+      }
     ],
-    "expected_keywords": ["lag", "consumer", "kafka"],
-    "anti_keywords": ["auth", "memory", "rate limit"]
+    "expected_keywords": [
+      "lag",
+      "consumer",
+      "kafka"
+    ],
+    "anti_keywords": [
+      "auth",
+      "memory",
+      "rate limit"
+    ],
+    "gold": "the orders consumer group is falling behind on partition 0 and lag is growing, which is breaching downstream sla. action: scale out consumer instances, identify slow handlers per message, and check for poison messages causing retries."
   },
   {
     "id": "config_misset",
     "logs": [
-      {"timestamp": "2026-05-06T10:09:00Z", "level": "INFO",  "trace_id": "t10", "message": "service starting env=staging"},
-      {"timestamp": "2026-05-06T10:09:00Z", "level": "WARN",  "trace_id": "t10", "message": "kafka brokers resolved to prod-kafka-1:9092 in env=staging"},
-      {"timestamp": "2026-05-06T10:09:00Z", "level": "ERROR", "trace_id": "t10", "message": "events flowing to prod topic from staging service: cross-environment leak detected"}
+      {
+        "timestamp": "2026-05-06T10:09:00Z",
+        "level": "INFO",
+        "trace_id": "t10",
+        "message": "service starting env=staging"
+      },
+      {
+        "timestamp": "2026-05-06T10:09:00Z",
+        "level": "WARN",
+        "trace_id": "t10",
+        "message": "kafka brokers resolved to prod-kafka-1:9092 in env=staging"
+      },
+      {
+        "timestamp": "2026-05-06T10:09:00Z",
+        "level": "ERROR",
+        "trace_id": "t10",
+        "message": "events flowing to prod topic from staging service: cross-environment leak detected"
+      }
     ],
-    "expected_keywords": ["config", "environment", "staging"],
-    "anti_keywords": ["memory", "auth", "deadlock"]
+    "expected_keywords": [
+      "config",
+      "environment",
+      "staging"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "deadlock"
+    ],
+    "gold": "the staging service has been pointed at the production kafka brokers and is producing real events into the prod topic. action: roll back the config change immediately; audit which events leaked and reconcile."
   },
   {
     "id": "redis_eviction",
     "logs": [
-      {"timestamp": "2026-05-06T10:10:00Z", "level": "INFO",  "trace_id": "t11", "message": "redis maxmemory=2gb policy=allkeys-lru evicted_keys_total=14821"},
-      {"timestamp": "2026-05-06T10:10:01Z", "level": "WARN",  "trace_id": "t11", "message": "session lookup miss key=sess:abc (recently active user)"},
-      {"timestamp": "2026-05-06T10:10:01Z", "level": "ERROR", "trace_id": "t11", "message": "user logged out unexpectedly: session evicted from cache"}
+      {
+        "timestamp": "2026-05-06T10:10:00Z",
+        "level": "INFO",
+        "trace_id": "t11",
+        "message": "redis maxmemory=2gb policy=allkeys-lru evicted_keys_total=14821"
+      },
+      {
+        "timestamp": "2026-05-06T10:10:01Z",
+        "level": "WARN",
+        "trace_id": "t11",
+        "message": "session lookup miss key=sess:abc (recently active user)"
+      },
+      {
+        "timestamp": "2026-05-06T10:10:01Z",
+        "level": "ERROR",
+        "trace_id": "t11",
+        "message": "user logged out unexpectedly: session evicted from cache"
+      }
     ],
-    "expected_keywords": ["redis", "eviction", "cache"],
-    "anti_keywords": ["db down", "tls", "deadlock"]
+    "expected_keywords": [
+      "redis",
+      "eviction",
+      "cache"
+    ],
+    "anti_keywords": [
+      "db down",
+      "tls",
+      "deadlock"
+    ],
+    "gold": "redis is evicting under memory pressure with maxmemory policy allkeys-lru; sessions are being dropped causing unexpected logouts. action: raise the redis maxmemory, switch to a session-only store, or move sessions to a persistent store."
   },
   {
     "id": "disk_full",
     "logs": [
-      {"timestamp": "2026-05-06T10:11:00Z", "level": "WARN",  "trace_id": "t12", "message": "disk usage on /var/lib/postgresql=98% (47GB/48GB)"},
-      {"timestamp": "2026-05-06T10:11:01Z", "level": "ERROR", "trace_id": "t12", "message": "could not extend file pg_wal/0000003: No space left on device"},
-      {"timestamp": "2026-05-06T10:11:01Z", "level": "FATAL", "trace_id": "t12", "message": "postgres going read-only: cannot write WAL"}
+      {
+        "timestamp": "2026-05-06T10:11:00Z",
+        "level": "WARN",
+        "trace_id": "t12",
+        "message": "disk usage on /var/lib/postgresql=98% (47GB/48GB)"
+      },
+      {
+        "timestamp": "2026-05-06T10:11:01Z",
+        "level": "ERROR",
+        "trace_id": "t12",
+        "message": "could not extend file pg_wal/0000003: No space left on device"
+      },
+      {
+        "timestamp": "2026-05-06T10:11:01Z",
+        "level": "FATAL",
+        "trace_id": "t12",
+        "message": "postgres going read-only: cannot write WAL"
+      }
     ],
-    "expected_keywords": ["disk", "space", "full"],
-    "anti_keywords": ["auth", "rate", "memory"]
+    "expected_keywords": [
+      "disk",
+      "space",
+      "full"
+    ],
+    "anti_keywords": [
+      "auth",
+      "rate",
+      "memory"
+    ],
+    "gold": "the postgres data volume is at 98% and a wal write failed with no space left on device; the database has gone read-only. action: free space on the data volume immediately (drop old WAL, truncate large tables, expand the disk)."
   },
   {
     "id": "fd_leak",
     "logs": [
-      {"timestamp": "2026-05-06T10:12:00Z", "level": "INFO",  "trace_id": "t13", "message": "process fd count=8192 (limit=8192)"},
-      {"timestamp": "2026-05-06T10:12:00Z", "level": "ERROR", "trace_id": "t13", "message": "OSError: [Errno 24] Too many open files: '/tmp/upload-9821.bin'"},
-      {"timestamp": "2026-05-06T10:12:00Z", "level": "ERROR", "trace_id": "t13", "message": "upload handler crashed: cannot open temp file"}
+      {
+        "timestamp": "2026-05-06T10:12:00Z",
+        "level": "INFO",
+        "trace_id": "t13",
+        "message": "process fd count=8192 (limit=8192)"
+      },
+      {
+        "timestamp": "2026-05-06T10:12:00Z",
+        "level": "ERROR",
+        "trace_id": "t13",
+        "message": "OSError: [Errno 24] Too many open files: '/tmp/upload-9821.bin'"
+      },
+      {
+        "timestamp": "2026-05-06T10:12:00Z",
+        "level": "ERROR",
+        "trace_id": "t13",
+        "message": "upload handler crashed: cannot open temp file"
+      }
     ],
-    "expected_keywords": ["file descriptor", "open files", "leak"],
-    "anti_keywords": ["db", "tls", "rate"]
+    "expected_keywords": [
+      "file descriptor",
+      "open files",
+      "leak"
+    ],
+    "anti_keywords": [
+      "db",
+      "tls",
+      "rate"
+    ],
+    "gold": "the process has hit its open-files ulimit (8192) and cannot open a new temp file for an upload; this points to a leak where file handles are not being closed. action: audit handlers that open files for missing close() and add a ulimit alarm."
   },
   {
     "id": "env_var_missing",
     "logs": [
-      {"timestamp": "2026-05-06T10:13:00Z", "level": "INFO",  "trace_id": "t14", "message": "service booting up commit=a1b2c3d"},
-      {"timestamp": "2026-05-06T10:13:00Z", "level": "ERROR", "trace_id": "t14", "message": "RuntimeError: missing required env var: STRIPE_SECRET_KEY"},
-      {"timestamp": "2026-05-06T10:13:00Z", "level": "FATAL", "trace_id": "t14", "message": "process exiting with code=1"}
+      {
+        "timestamp": "2026-05-06T10:13:00Z",
+        "level": "INFO",
+        "trace_id": "t14",
+        "message": "service booting up commit=a1b2c3d"
+      },
+      {
+        "timestamp": "2026-05-06T10:13:00Z",
+        "level": "ERROR",
+        "trace_id": "t14",
+        "message": "RuntimeError: missing required env var: STRIPE_SECRET_KEY"
+      },
+      {
+        "timestamp": "2026-05-06T10:13:00Z",
+        "level": "FATAL",
+        "trace_id": "t14",
+        "message": "process exiting with code=1"
+      }
     ],
-    "expected_keywords": ["env", "missing", "config"],
-    "anti_keywords": ["memory", "deadlock", "tls"]
+    "expected_keywords": [
+      "env",
+      "missing",
+      "config"
+    ],
+    "anti_keywords": [
+      "memory",
+      "deadlock",
+      "tls"
+    ],
+    "gold": "the service refused to start because STRIPE_SECRET_KEY env var is missing; the deploy template did not pass it through. action: add the secret to the deploy environment and redeploy; ensure config validation fails fast with a clear message."
   },
   {
     "id": "thread_pool_exhausted",
     "logs": [
-      {"timestamp": "2026-05-06T10:14:00Z", "level": "WARN",  "trace_id": "t15", "message": "tomcat http-nio thread pool: active=200 queue_size=1024 max=200"},
-      {"timestamp": "2026-05-06T10:14:01Z", "level": "WARN",  "trace_id": "t15", "message": "request queued for 4200ms before dispatch"},
-      {"timestamp": "2026-05-06T10:14:02Z", "level": "ERROR", "trace_id": "t15", "message": "java.util.concurrent.RejectedExecutionException: Task rejected from ThreadPoolExecutor (queue full)"}
+      {
+        "timestamp": "2026-05-06T10:14:00Z",
+        "level": "WARN",
+        "trace_id": "t15",
+        "message": "tomcat http-nio thread pool: active=200 queue_size=1024 max=200"
+      },
+      {
+        "timestamp": "2026-05-06T10:14:01Z",
+        "level": "WARN",
+        "trace_id": "t15",
+        "message": "request queued for 4200ms before dispatch"
+      },
+      {
+        "timestamp": "2026-05-06T10:14:02Z",
+        "level": "ERROR",
+        "trace_id": "t15",
+        "message": "java.util.concurrent.RejectedExecutionException: Task rejected from ThreadPoolExecutor (queue full)"
+      }
     ],
-    "expected_keywords": ["thread", "pool", "exhausted"],
-    "anti_keywords": ["db", "tls", "auth"]
+    "expected_keywords": [
+      "thread",
+      "pool",
+      "exhausted"
+    ],
+    "anti_keywords": [
+      "db",
+      "tls",
+      "auth"
+    ],
+    "gold": "the tomcat http thread pool is saturated and new tasks are being rejected; downstream calls are saturating worker threads. action: investigate why upstream calls are slow, set per-call timeouts, and bound the thread pool to fail fast on overload."
   },
   {
     "id": "distributed_lock_contention",
     "logs": [
-      {"timestamp": "2026-05-06T10:15:00Z", "level": "INFO",  "trace_id": "t16", "message": "acquiring redis lock key=billing:job:nightly ttl=30s"},
-      {"timestamp": "2026-05-06T10:15:30Z", "level": "WARN",  "trace_id": "t16", "message": "lock still held by holder=worker-7; retrying"},
-      {"timestamp": "2026-05-06T10:16:00Z", "level": "WARN",  "trace_id": "t16", "message": "lock still held by holder=worker-7; retrying"},
-      {"timestamp": "2026-05-06T10:16:30Z", "level": "ERROR", "trace_id": "t16", "message": "billing nightly job skipped this run: lock held >90s by another worker"}
+      {
+        "timestamp": "2026-05-06T10:15:00Z",
+        "level": "INFO",
+        "trace_id": "t16",
+        "message": "acquiring redis lock key=billing:job:nightly ttl=30s"
+      },
+      {
+        "timestamp": "2026-05-06T10:15:30Z",
+        "level": "WARN",
+        "trace_id": "t16",
+        "message": "lock still held by holder=worker-7; retrying"
+      },
+      {
+        "timestamp": "2026-05-06T10:16:00Z",
+        "level": "WARN",
+        "trace_id": "t16",
+        "message": "lock still held by holder=worker-7; retrying"
+      },
+      {
+        "timestamp": "2026-05-06T10:16:30Z",
+        "level": "ERROR",
+        "trace_id": "t16",
+        "message": "billing nightly job skipped this run: lock held >90s by another worker"
+      }
     ],
-    "expected_keywords": ["lock", "contention", "held"],
-    "anti_keywords": ["memory", "tls", "rate"]
+    "expected_keywords": [
+      "lock",
+      "contention",
+      "held"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "rate"
+    ],
+    "gold": "the nightly billing redis lock is held by another worker for over 90s; this run was skipped to avoid double execution. action: investigate why the holder is slow; consider lock fencing tokens and a lower ttl."
   },
   {
     "id": "s3_throttle",
     "logs": [
-      {"timestamp": "2026-05-06T10:17:00Z", "level": "INFO",  "trace_id": "t17", "message": "PutObject bucket=archive key=2026/05/06/batch.parquet size=412MB"},
-      {"timestamp": "2026-05-06T10:17:01Z", "level": "WARN",  "trace_id": "t17", "message": "s3 503 SlowDown: Reduce your request rate (request_id=ABCDEF)"},
-      {"timestamp": "2026-05-06T10:17:03Z", "level": "WARN",  "trace_id": "t17", "message": "s3 503 SlowDown: Reduce your request rate (attempt 2)"},
-      {"timestamp": "2026-05-06T10:17:08Z", "level": "ERROR", "trace_id": "t17", "message": "archive upload failed after 4 retries with backoff"}
+      {
+        "timestamp": "2026-05-06T10:17:00Z",
+        "level": "INFO",
+        "trace_id": "t17",
+        "message": "PutObject bucket=archive key=2026/05/06/batch.parquet size=412MB"
+      },
+      {
+        "timestamp": "2026-05-06T10:17:01Z",
+        "level": "WARN",
+        "trace_id": "t17",
+        "message": "s3 503 SlowDown: Reduce your request rate (request_id=ABCDEF)"
+      },
+      {
+        "timestamp": "2026-05-06T10:17:03Z",
+        "level": "WARN",
+        "trace_id": "t17",
+        "message": "s3 503 SlowDown: Reduce your request rate (attempt 2)"
+      },
+      {
+        "timestamp": "2026-05-06T10:17:08Z",
+        "level": "ERROR",
+        "trace_id": "t17",
+        "message": "archive upload failed after 4 retries with backoff"
+      }
     ],
-    "expected_keywords": ["s3", "throttle", "slowdown"],
-    "anti_keywords": ["db", "auth", "memory"]
+    "expected_keywords": [
+      "s3",
+      "throttle",
+      "slowdown"
+    ],
+    "anti_keywords": [
+      "db",
+      "auth",
+      "memory"
+    ],
+    "gold": "s3 is returning 503 SlowDown to the prefix being uploaded; after backoff retries the upload was abandoned. action: spread writes across more s3 prefixes (key-space partitioning) or open a support case for higher limits."
   },
   {
     "id": "migration_partial_apply",
     "logs": [
-      {"timestamp": "2026-05-06T10:18:00Z", "level": "INFO",  "trace_id": "t18", "message": "applying migration 0042_add_currency_column.sql"},
-      {"timestamp": "2026-05-06T10:18:30Z", "level": "ERROR", "trace_id": "t18", "message": "migration 0042 step 3/5 failed: ERROR: cannot ALTER TABLE while concurrent index build active"},
-      {"timestamp": "2026-05-06T10:18:30Z", "level": "ERROR", "trace_id": "t18", "message": "schema_migrations table still pinned at 0041; database is in an inconsistent state"}
+      {
+        "timestamp": "2026-05-06T10:18:00Z",
+        "level": "INFO",
+        "trace_id": "t18",
+        "message": "applying migration 0042_add_currency_column.sql"
+      },
+      {
+        "timestamp": "2026-05-06T10:18:30Z",
+        "level": "ERROR",
+        "trace_id": "t18",
+        "message": "migration 0042 step 3/5 failed: ERROR: cannot ALTER TABLE while concurrent index build active"
+      },
+      {
+        "timestamp": "2026-05-06T10:18:30Z",
+        "level": "ERROR",
+        "trace_id": "t18",
+        "message": "schema_migrations table still pinned at 0041; database is in an inconsistent state"
+      }
     ],
-    "expected_keywords": ["migration", "schema", "partial"],
-    "anti_keywords": ["memory", "tls", "rate"]
+    "expected_keywords": [
+      "migration",
+      "schema",
+      "partial"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "rate"
+    ],
+    "gold": "alembic migration 0042 failed mid-run leaving the database in an inconsistent state where schema_migrations still records 0041; the db cannot be reasoned about safely. action: roll back the partial changes manually, then rerun the migration after fixing the concurrent index build issue."
   },
   {
     "id": "timezone_bug",
     "logs": [
-      {"timestamp": "2026-05-06T10:19:00Z", "level": "INFO",  "trace_id": "t19", "message": "scheduling cron job at 02:00 (server tz=UTC)"},
-      {"timestamp": "2026-05-06T10:19:01Z", "level": "WARN",  "trace_id": "t19", "message": "next run computed to be in the past: 2026-05-06T01:30:00 (DST shift not handled)"},
-      {"timestamp": "2026-05-06T10:19:01Z", "level": "ERROR", "trace_id": "t19", "message": "cron triggered twice in the same hour due to DST fallback"}
+      {
+        "timestamp": "2026-05-06T10:19:00Z",
+        "level": "INFO",
+        "trace_id": "t19",
+        "message": "scheduling cron job at 02:00 (server tz=UTC)"
+      },
+      {
+        "timestamp": "2026-05-06T10:19:01Z",
+        "level": "WARN",
+        "trace_id": "t19",
+        "message": "next run computed to be in the past: 2026-05-06T01:30:00 (DST shift not handled)"
+      },
+      {
+        "timestamp": "2026-05-06T10:19:01Z",
+        "level": "ERROR",
+        "trace_id": "t19",
+        "message": "cron triggered twice in the same hour due to DST fallback"
+      }
     ],
-    "expected_keywords": ["timezone", "dst", "time"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "timezone",
+      "dst",
+      "time"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "the cron schedule does not handle the dst fallback so the job ran twice in the same hour. action: schedule cron in utc and convert to local time only at the boundary, or use a scheduler that is dst-aware."
   },
   {
     "id": "nan_aggregation",
     "logs": [
-      {"timestamp": "2026-05-06T10:20:00Z", "level": "INFO",  "trace_id": "t20", "message": "computing avg latency p50 over 0 samples"},
-      {"timestamp": "2026-05-06T10:20:00Z", "level": "WARN",  "trace_id": "t20", "message": "division by zero in metric aggregation; emitting NaN"},
-      {"timestamp": "2026-05-06T10:20:01Z", "level": "ERROR", "trace_id": "t20", "message": "datadog rejected payload: 'NaN' is not a valid metric value"}
+      {
+        "timestamp": "2026-05-06T10:20:00Z",
+        "level": "INFO",
+        "trace_id": "t20",
+        "message": "computing avg latency p50 over 0 samples"
+      },
+      {
+        "timestamp": "2026-05-06T10:20:00Z",
+        "level": "WARN",
+        "trace_id": "t20",
+        "message": "division by zero in metric aggregation; emitting NaN"
+      },
+      {
+        "timestamp": "2026-05-06T10:20:01Z",
+        "level": "ERROR",
+        "trace_id": "t20",
+        "message": "datadog rejected payload: 'NaN' is not a valid metric value"
+      }
     ],
-    "expected_keywords": ["nan", "aggregation", "division"],
-    "anti_keywords": ["db", "auth", "tls"]
+    "expected_keywords": [
+      "nan",
+      "aggregation",
+      "division"
+    ],
+    "anti_keywords": [
+      "db",
+      "auth",
+      "tls"
+    ],
+    "gold": "the metric aggregator divided by zero samples and emitted NaN, which datadog rejected as invalid. action: gate the aggregation on n_samples > 0 and emit a default or skip the data point when there is nothing to aggregate."
   },
   {
     "id": "secret_rotation_lag",
     "logs": [
-      {"timestamp": "2026-05-06T10:21:00Z", "level": "INFO",  "trace_id": "t21", "message": "secrets manager: AWS/RDS/master rotated 02:14:33 UTC"},
-      {"timestamp": "2026-05-06T10:21:05Z", "level": "ERROR", "trace_id": "t21", "message": "FATAL: password authentication failed for user 'app'"},
-      {"timestamp": "2026-05-06T10:21:06Z", "level": "WARN",  "trace_id": "t21", "message": "service still using cached credential issued 04:00:00 UTC; not yet picked up rotation"}
+      {
+        "timestamp": "2026-05-06T10:21:00Z",
+        "level": "INFO",
+        "trace_id": "t21",
+        "message": "secrets manager: AWS/RDS/master rotated 02:14:33 UTC"
+      },
+      {
+        "timestamp": "2026-05-06T10:21:05Z",
+        "level": "ERROR",
+        "trace_id": "t21",
+        "message": "FATAL: password authentication failed for user 'app'"
+      },
+      {
+        "timestamp": "2026-05-06T10:21:06Z",
+        "level": "WARN",
+        "trace_id": "t21",
+        "message": "service still using cached credential issued 04:00:00 UTC; not yet picked up rotation"
+      }
     ],
-    "expected_keywords": ["secret", "rotation", "credential"],
-    "anti_keywords": ["memory", "deadlock", "tls"]
+    "expected_keywords": [
+      "secret",
+      "rotation",
+      "credential"
+    ],
+    "anti_keywords": [
+      "memory",
+      "deadlock",
+      "tls"
+    ],
+    "gold": "rds master credential was rotated but the service is still using the cached previous credential and getting authentication failures. action: invalidate the in-process credential cache on rotation; subscribe to secrets manager rotation events instead of caching forever."
   },
   {
     "id": "backpressure_overflow",
     "logs": [
-      {"timestamp": "2026-05-06T10:22:00Z", "level": "WARN",  "trace_id": "t22", "message": "internal queue depth=9800/10000 (98% full)"},
-      {"timestamp": "2026-05-06T10:22:01Z", "level": "WARN",  "trace_id": "t22", "message": "dropping oldest events to keep up: dropped=120"},
-      {"timestamp": "2026-05-06T10:22:02Z", "level": "ERROR", "trace_id": "t22", "message": "downstream consumer cannot keep up; backpressure -> data loss"}
+      {
+        "timestamp": "2026-05-06T10:22:00Z",
+        "level": "WARN",
+        "trace_id": "t22",
+        "message": "internal queue depth=9800/10000 (98% full)"
+      },
+      {
+        "timestamp": "2026-05-06T10:22:01Z",
+        "level": "WARN",
+        "trace_id": "t22",
+        "message": "dropping oldest events to keep up: dropped=120"
+      },
+      {
+        "timestamp": "2026-05-06T10:22:02Z",
+        "level": "ERROR",
+        "trace_id": "t22",
+        "message": "downstream consumer cannot keep up; backpressure -> data loss"
+      }
     ],
-    "expected_keywords": ["backpressure", "queue", "overflow"],
-    "anti_keywords": ["auth", "tls", "memory"]
+    "expected_keywords": [
+      "backpressure",
+      "queue",
+      "overflow"
+    ],
+    "anti_keywords": [
+      "auth",
+      "tls",
+      "memory"
+    ],
+    "gold": "the internal queue is full and the producer started dropping events; downstream is too slow. action: add real backpressure that pushes back to the producer instead of dropping; scale the consumer or lower the producer rate."
   },
   {
     "id": "slow_dns",
     "logs": [
-      {"timestamp": "2026-05-06T10:23:00Z", "level": "INFO",  "trace_id": "t23", "message": "outbound call api.partner.example pending dns lookup"},
-      {"timestamp": "2026-05-06T10:23:04Z", "level": "WARN",  "trace_id": "t23", "message": "dns resolution took 4200ms (resolver=169.254.169.253)"},
-      {"timestamp": "2026-05-06T10:23:04Z", "level": "ERROR", "trace_id": "t23", "message": "request timed out at the http client (5s budget) — most spent in dns"}
+      {
+        "timestamp": "2026-05-06T10:23:00Z",
+        "level": "INFO",
+        "trace_id": "t23",
+        "message": "outbound call api.partner.example pending dns lookup"
+      },
+      {
+        "timestamp": "2026-05-06T10:23:04Z",
+        "level": "WARN",
+        "trace_id": "t23",
+        "message": "dns resolution took 4200ms (resolver=169.254.169.253)"
+      },
+      {
+        "timestamp": "2026-05-06T10:23:04Z",
+        "level": "ERROR",
+        "trace_id": "t23",
+        "message": "request timed out at the http client (5s budget) \u2014 most spent in dns"
+      }
     ],
-    "expected_keywords": ["dns", "resolution", "lookup"],
-    "anti_keywords": ["db", "memory", "auth"]
+    "expected_keywords": [
+      "dns",
+      "resolution",
+      "lookup"
+    ],
+    "anti_keywords": [
+      "db",
+      "memory",
+      "auth"
+    ],
+    "gold": "dns resolution is taking 4+ seconds against the configured resolver and the http client's overall timeout is being eaten by it. action: switch to a faster resolver or local cache, and set a separate dns timeout shorter than the request timeout."
   },
   {
     "id": "circular_dep_init",
     "logs": [
-      {"timestamp": "2026-05-06T10:24:00Z", "level": "INFO",  "trace_id": "t24", "message": "spring application starting up"},
-      {"timestamp": "2026-05-06T10:24:02Z", "level": "ERROR", "trace_id": "t24", "message": "BeanCurrentlyInCreationException: Error creating bean with name 'orderService': Requested bean is currently in creation: Is there an unresolvable circular reference?"},
-      {"timestamp": "2026-05-06T10:24:02Z", "level": "FATAL", "trace_id": "t24", "message": "application context failed to start"}
+      {
+        "timestamp": "2026-05-06T10:24:00Z",
+        "level": "INFO",
+        "trace_id": "t24",
+        "message": "spring application starting up"
+      },
+      {
+        "timestamp": "2026-05-06T10:24:02Z",
+        "level": "ERROR",
+        "trace_id": "t24",
+        "message": "BeanCurrentlyInCreationException: Error creating bean with name 'orderService': Requested bean is currently in creation: Is there an unresolvable circular reference?"
+      },
+      {
+        "timestamp": "2026-05-06T10:24:02Z",
+        "level": "FATAL",
+        "trace_id": "t24",
+        "message": "application context failed to start"
+      }
     ],
-    "expected_keywords": ["circular", "dependency", "bean"],
-    "anti_keywords": ["memory", "tls", "rate"]
+    "expected_keywords": [
+      "circular",
+      "dependency",
+      "bean"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "rate"
+    ],
+    "gold": "spring detected an unresolvable circular reference involving orderService during startup; the application context cannot finish booting. action: break the cycle by introducing an interface, an event listener, or @Lazy injection on one side."
   },
   {
     "id": "corrupted_payload",
     "logs": [
-      {"timestamp": "2026-05-06T10:25:00Z", "level": "INFO",  "trace_id": "t25", "message": "consumed kafka message offset=8421 size=1.2KB"},
-      {"timestamp": "2026-05-06T10:25:00Z", "level": "ERROR", "trace_id": "t25", "message": "json.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"},
-      {"timestamp": "2026-05-06T10:25:00Z", "level": "WARN",  "trace_id": "t25", "message": "raw payload starts with bytes: 0x1f 0x8b 0x08 (looks gzipped, expected json)"},
-      {"timestamp": "2026-05-06T10:25:00Z", "level": "ERROR", "trace_id": "t25", "message": "unable to decode message; producer may have changed serialization without coordination"}
+      {
+        "timestamp": "2026-05-06T10:25:00Z",
+        "level": "INFO",
+        "trace_id": "t25",
+        "message": "consumed kafka message offset=8421 size=1.2KB"
+      },
+      {
+        "timestamp": "2026-05-06T10:25:00Z",
+        "level": "ERROR",
+        "trace_id": "t25",
+        "message": "json.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "timestamp": "2026-05-06T10:25:00Z",
+        "level": "WARN",
+        "trace_id": "t25",
+        "message": "raw payload starts with bytes: 0x1f 0x8b 0x08 (looks gzipped, expected json)"
+      },
+      {
+        "timestamp": "2026-05-06T10:25:00Z",
+        "level": "ERROR",
+        "trace_id": "t25",
+        "message": "unable to decode message; producer may have changed serialization without coordination"
+      }
     ],
-    "expected_keywords": ["serialization", "decode", "json"],
-    "anti_keywords": ["memory", "tls", "auth"]
+    "expected_keywords": [
+      "serialization",
+      "decode",
+      "json"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "auth"
+    ],
+    "gold": "the consumer received a gzipped payload but its decoder expects raw json; this looks like an uncoordinated change on the producer side. action: align the producer/consumer on a single serialization format and version; reject and dlq malformed messages."
   },
   {
     "id": "goroutine_leak",
     "logs": [
-      {"timestamp": "2026-05-06T11:00:00Z", "level": "INFO",  "trace_id": "t26", "message": "goroutines=1024 heap_in_use=512MB"},
-      {"timestamp": "2026-05-06T11:10:00Z", "level": "WARN",  "trace_id": "t26", "message": "goroutines=18432 heap_in_use=2.1GB (still growing)"},
-      {"timestamp": "2026-05-06T11:10:00Z", "level": "WARN",  "trace_id": "t26", "message": "pprof shows 17000 goroutines blocked on channel receive in http.handleStream"}
+      {
+        "timestamp": "2026-05-06T11:00:00Z",
+        "level": "INFO",
+        "trace_id": "t26",
+        "message": "goroutines=1024 heap_in_use=512MB"
+      },
+      {
+        "timestamp": "2026-05-06T11:10:00Z",
+        "level": "WARN",
+        "trace_id": "t26",
+        "message": "goroutines=18432 heap_in_use=2.1GB (still growing)"
+      },
+      {
+        "timestamp": "2026-05-06T11:10:00Z",
+        "level": "WARN",
+        "trace_id": "t26",
+        "message": "pprof shows 17000 goroutines blocked on channel receive in http.handleStream"
+      }
     ],
-    "expected_keywords": ["goroutine", "leak", "blocked"],
-    "anti_keywords": ["db", "tls", "auth"]
+    "expected_keywords": [
+      "goroutine",
+      "leak",
+      "blocked"
+    ],
+    "anti_keywords": [
+      "db",
+      "tls",
+      "auth"
+    ],
+    "gold": "the service is leaking goroutines that block on a channel receive in http.handleStream; heap and goroutine count keep climbing under load. action: ensure every goroutine has a cancellation path (context with timeout or close on the receiving channel)."
   },
   {
     "id": "clock_skew",
     "logs": [
-      {"timestamp": "2026-05-06T11:01:00Z", "level": "WARN",  "trace_id": "t27", "message": "ntp not synced; offset=+247s drift=growing"},
-      {"timestamp": "2026-05-06T11:01:01Z", "level": "ERROR", "trace_id": "t27", "message": "aws sigv4 signature rejected: RequestTimeTooSkewed (server time 247s ahead of aws)"},
-      {"timestamp": "2026-05-06T11:01:01Z", "level": "ERROR", "trace_id": "t27", "message": "all outbound s3 calls failing with 403 SignatureDoesNotMatch"}
+      {
+        "timestamp": "2026-05-06T11:01:00Z",
+        "level": "WARN",
+        "trace_id": "t27",
+        "message": "ntp not synced; offset=+247s drift=growing"
+      },
+      {
+        "timestamp": "2026-05-06T11:01:01Z",
+        "level": "ERROR",
+        "trace_id": "t27",
+        "message": "aws sigv4 signature rejected: RequestTimeTooSkewed (server time 247s ahead of aws)"
+      },
+      {
+        "timestamp": "2026-05-06T11:01:01Z",
+        "level": "ERROR",
+        "trace_id": "t27",
+        "message": "all outbound s3 calls failing with 403 SignatureDoesNotMatch"
+      }
     ],
-    "expected_keywords": ["clock", "skew", "ntp"],
-    "anti_keywords": ["memory", "deadlock", "rate"]
+    "expected_keywords": [
+      "clock",
+      "skew",
+      "ntp"
+    ],
+    "anti_keywords": [
+      "memory",
+      "deadlock",
+      "rate"
+    ],
+    "gold": "the host's clock is 247 seconds ahead of aws's clock so sigv4 signatures are rejected and all s3 calls fail with 403. action: fix ntp on the host and add a watchdog that alarms if drift exceeds 60s."
   },
   {
     "id": "load_balancer_unhealthy",
     "logs": [
-      {"timestamp": "2026-05-06T11:02:00Z", "level": "INFO",  "trace_id": "t28", "message": "alb health check on /healthz returning 200"},
-      {"timestamp": "2026-05-06T11:02:01Z", "level": "WARN",  "trace_id": "t28", "message": "/readyz returning 503 db_pool=exhausted but /healthz still 200"},
-      {"timestamp": "2026-05-06T11:02:01Z", "level": "ERROR", "trace_id": "t28", "message": "alb keeps routing traffic: health probe checks /healthz instead of /readyz"}
+      {
+        "timestamp": "2026-05-06T11:02:00Z",
+        "level": "INFO",
+        "trace_id": "t28",
+        "message": "alb health check on /healthz returning 200"
+      },
+      {
+        "timestamp": "2026-05-06T11:02:01Z",
+        "level": "WARN",
+        "trace_id": "t28",
+        "message": "/readyz returning 503 db_pool=exhausted but /healthz still 200"
+      },
+      {
+        "timestamp": "2026-05-06T11:02:01Z",
+        "level": "ERROR",
+        "trace_id": "t28",
+        "message": "alb keeps routing traffic: health probe checks /healthz instead of /readyz"
+      }
     ],
-    "expected_keywords": ["load balancer", "health", "readiness"],
-    "anti_keywords": ["memory", "tls", "kafka"]
+    "expected_keywords": [
+      "load balancer",
+      "health",
+      "readiness"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "kafka"
+    ],
+    "gold": "the alb health check is hitting /healthz which always returns 200 even when the app is not actually able to serve requests; /readyz reports the truth and is not what the lb checks. action: point the lb health check at /readyz so unhealthy pods are pulled out."
   },
   {
     "id": "kafka_partition_imbalance",
     "logs": [
-      {"timestamp": "2026-05-06T11:03:00Z", "level": "INFO",  "trace_id": "t29", "message": "consumer p0 lag=2 p1 lag=8 p2 lag=14000 p3 lag=4"},
-      {"timestamp": "2026-05-06T11:03:01Z", "level": "WARN",  "trace_id": "t29", "message": "p2 producer using key='checkout' for 92% of messages — single key bucket"},
-      {"timestamp": "2026-05-06T11:03:01Z", "level": "WARN",  "trace_id": "t29", "message": "downstream p99 latency rising due to partition hotspot"}
+      {
+        "timestamp": "2026-05-06T11:03:00Z",
+        "level": "INFO",
+        "trace_id": "t29",
+        "message": "consumer p0 lag=2 p1 lag=8 p2 lag=14000 p3 lag=4"
+      },
+      {
+        "timestamp": "2026-05-06T11:03:01Z",
+        "level": "WARN",
+        "trace_id": "t29",
+        "message": "p2 producer using key='checkout' for 92% of messages \u2014 single key bucket"
+      },
+      {
+        "timestamp": "2026-05-06T11:03:01Z",
+        "level": "WARN",
+        "trace_id": "t29",
+        "message": "downstream p99 latency rising due to partition hotspot"
+      }
     ],
-    "expected_keywords": ["partition", "hot", "key"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "partition",
+      "hot",
+      "key"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "one partition is hot because 92% of producer messages use the same key, and the assigned consumer cannot keep up. action: change the partition key to a higher-cardinality field, or salt it, so load spreads evenly across partitions."
   },
   {
     "id": "graceful_shutdown_failure",
     "logs": [
-      {"timestamp": "2026-05-06T11:04:00Z", "level": "INFO",  "trace_id": "t30", "message": "received SIGTERM from k8s; pod terminating"},
-      {"timestamp": "2026-05-06T11:04:00Z", "level": "WARN",  "trace_id": "t30", "message": "in-flight requests count=42; no shutdown handler registered"},
-      {"timestamp": "2026-05-06T11:04:30Z", "level": "ERROR", "trace_id": "t30", "message": "process killed by SIGKILL after 30s grace; 42 client requests dropped"}
+      {
+        "timestamp": "2026-05-06T11:04:00Z",
+        "level": "INFO",
+        "trace_id": "t30",
+        "message": "received SIGTERM from k8s; pod terminating"
+      },
+      {
+        "timestamp": "2026-05-06T11:04:00Z",
+        "level": "WARN",
+        "trace_id": "t30",
+        "message": "in-flight requests count=42; no shutdown handler registered"
+      },
+      {
+        "timestamp": "2026-05-06T11:04:30Z",
+        "level": "ERROR",
+        "trace_id": "t30",
+        "message": "process killed by SIGKILL after 30s grace; 42 client requests dropped"
+      }
     ],
-    "expected_keywords": ["shutdown", "drain", "sigterm"],
-    "anti_keywords": ["memory", "tls", "kafka"]
+    "expected_keywords": [
+      "shutdown",
+      "drain",
+      "sigterm"
+    ],
+    "anti_keywords": [
+      "memory",
+      "tls",
+      "kafka"
+    ],
+    "gold": "the pod received SIGTERM but no shutdown handler is registered, so 42 in-flight requests were dropped when SIGKILL fired after the grace period. action: register a signal handler that stops accepting new connections and drains in-flight requests within the grace window."
   },
   {
     "id": "null_pointer_optional_field",
     "logs": [
-      {"timestamp": "2026-05-06T11:05:00Z", "level": "INFO",  "trace_id": "t31", "message": "POST /webhook payload received from partner=acme"},
-      {"timestamp": "2026-05-06T11:05:00Z", "level": "ERROR", "trace_id": "t31", "message": "AttributeError: 'NoneType' object has no attribute 'amount'"},
-      {"timestamp": "2026-05-06T11:05:00Z", "level": "ERROR", "trace_id": "t31", "message": "webhook handler crashed: optional field 'transaction.amount' was null but assumed present"}
+      {
+        "timestamp": "2026-05-06T11:05:00Z",
+        "level": "INFO",
+        "trace_id": "t31",
+        "message": "POST /webhook payload received from partner=acme"
+      },
+      {
+        "timestamp": "2026-05-06T11:05:00Z",
+        "level": "ERROR",
+        "trace_id": "t31",
+        "message": "AttributeError: 'NoneType' object has no attribute 'amount'"
+      },
+      {
+        "timestamp": "2026-05-06T11:05:00Z",
+        "level": "ERROR",
+        "trace_id": "t31",
+        "message": "webhook handler crashed: optional field 'transaction.amount' was null but assumed present"
+      }
     ],
-    "expected_keywords": ["null", "missing field", "attribute"],
-    "anti_keywords": ["memory", "rate", "deadlock"]
+    "expected_keywords": [
+      "null",
+      "missing field",
+      "attribute"
+    ],
+    "anti_keywords": [
+      "memory",
+      "rate",
+      "deadlock"
+    ],
+    "gold": "the webhook handler assumed transaction.amount is always present but the partner sent a payload where it is null. action: validate the incoming payload at the boundary (pydantic, json schema) and either reject or default the field before downstream code reads it."
   },
   {
     "id": "schema_drift_consumer",
     "logs": [
-      {"timestamp": "2026-05-06T11:06:00Z", "level": "INFO",  "trace_id": "t32", "message": "consuming from orders.v2 topic schema=2026-01-04"},
-      {"timestamp": "2026-05-06T11:06:01Z", "level": "WARN",  "trace_id": "t32", "message": "unexpected field 'tax_breakdown' in payload (not in our local schema 2026-01-04)"},
-      {"timestamp": "2026-05-06T11:06:01Z", "level": "ERROR", "trace_id": "t32", "message": "ProtoDecodeError: producer schema 2026-04-30 added required field; consumer not updated"}
+      {
+        "timestamp": "2026-05-06T11:06:00Z",
+        "level": "INFO",
+        "trace_id": "t32",
+        "message": "consuming from orders.v2 topic schema=2026-01-04"
+      },
+      {
+        "timestamp": "2026-05-06T11:06:01Z",
+        "level": "WARN",
+        "trace_id": "t32",
+        "message": "unexpected field 'tax_breakdown' in payload (not in our local schema 2026-01-04)"
+      },
+      {
+        "timestamp": "2026-05-06T11:06:01Z",
+        "level": "ERROR",
+        "trace_id": "t32",
+        "message": "ProtoDecodeError: producer schema 2026-04-30 added required field; consumer not updated"
+      }
     ],
-    "expected_keywords": ["schema", "drift", "consumer"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "schema",
+      "drift",
+      "consumer"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "the producer started emitting a new required field but the consumer's locally pinned schema is out of date, so the protobuf decode fails. action: align the schema registry with the consumer and ensure consumers are updated before producers emit incompatible changes."
   },
   {
     "id": "retry_storm_amplification",
     "logs": [
-      {"timestamp": "2026-05-06T11:07:00Z", "level": "WARN",  "trace_id": "t33", "message": "upstream payments returned 503; retrying immediately (no backoff)"},
-      {"timestamp": "2026-05-06T11:07:00Z", "level": "WARN",  "trace_id": "t33", "message": "5x retries in 1s from 200 in-flight requests = 1000 rps to payments"},
-      {"timestamp": "2026-05-06T11:07:01Z", "level": "ERROR", "trace_id": "t33", "message": "payments service circuit broken: retry storm caused by missing exponential backoff"}
+      {
+        "timestamp": "2026-05-06T11:07:00Z",
+        "level": "WARN",
+        "trace_id": "t33",
+        "message": "upstream payments returned 503; retrying immediately (no backoff)"
+      },
+      {
+        "timestamp": "2026-05-06T11:07:00Z",
+        "level": "WARN",
+        "trace_id": "t33",
+        "message": "5x retries in 1s from 200 in-flight requests = 1000 rps to payments"
+      },
+      {
+        "timestamp": "2026-05-06T11:07:01Z",
+        "level": "ERROR",
+        "trace_id": "t33",
+        "message": "payments service circuit broken: retry storm caused by missing exponential backoff"
+      }
     ],
-    "expected_keywords": ["retry", "storm", "backoff"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "retry",
+      "storm",
+      "backoff"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "5x retries with no backoff against the payments service amplified normal load to 1000rps and tripped the circuit. action: add exponential backoff with full jitter, cap retries, and gate retries behind a circuit breaker."
   },
   {
     "id": "stale_connection_pool",
     "logs": [
-      {"timestamp": "2026-05-06T11:08:00Z", "level": "INFO",  "trace_id": "t34", "message": "rds idle_in_transaction_session_timeout=300s; client pool max_idle=600s"},
-      {"timestamp": "2026-05-06T11:08:01Z", "level": "ERROR", "trace_id": "t34", "message": "psycopg2.OperationalError: server closed the connection unexpectedly"},
-      {"timestamp": "2026-05-06T11:08:01Z", "level": "ERROR", "trace_id": "t34", "message": "every checkout from pool fails first attempt; client max_idle exceeds server timeout"}
+      {
+        "timestamp": "2026-05-06T11:08:00Z",
+        "level": "INFO",
+        "trace_id": "t34",
+        "message": "rds idle_in_transaction_session_timeout=300s; client pool max_idle=600s"
+      },
+      {
+        "timestamp": "2026-05-06T11:08:01Z",
+        "level": "ERROR",
+        "trace_id": "t34",
+        "message": "psycopg2.OperationalError: server closed the connection unexpectedly"
+      },
+      {
+        "timestamp": "2026-05-06T11:08:01Z",
+        "level": "ERROR",
+        "trace_id": "t34",
+        "message": "every checkout from pool fails first attempt; client max_idle exceeds server timeout"
+      }
     ],
-    "expected_keywords": ["stale", "connection", "pool"],
-    "anti_keywords": ["memory", "auth", "rate"]
+    "expected_keywords": [
+      "stale",
+      "connection",
+      "pool"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "rate"
+    ],
+    "gold": "the client's idle connection lifetime exceeds the rds idle_in_transaction_session_timeout, so checked-out connections are dead-on-arrival. action: set the client max_idle below the server side timeout (e.g. 240s vs server's 300s)."
   },
   {
     "id": "read_timeout_amplification",
     "logs": [
-      {"timestamp": "2026-05-06T11:09:00Z", "level": "INFO",  "trace_id": "t35", "message": "tomcat thread pool max=200; current active=200"},
-      {"timestamp": "2026-05-06T11:09:00Z", "level": "WARN",  "trace_id": "t35", "message": "150 of 200 workers blocked on http client read from upstream-x (no read timeout set)"},
-      {"timestamp": "2026-05-06T11:09:01Z", "level": "ERROR", "trace_id": "t35", "message": "service unable to accept new connections; one slow upstream blocked the entire worker pool"}
+      {
+        "timestamp": "2026-05-06T11:09:00Z",
+        "level": "INFO",
+        "trace_id": "t35",
+        "message": "tomcat thread pool max=200; current active=200"
+      },
+      {
+        "timestamp": "2026-05-06T11:09:00Z",
+        "level": "WARN",
+        "trace_id": "t35",
+        "message": "150 of 200 workers blocked on http client read from upstream-x (no read timeout set)"
+      },
+      {
+        "timestamp": "2026-05-06T11:09:01Z",
+        "level": "ERROR",
+        "trace_id": "t35",
+        "message": "service unable to accept new connections; one slow upstream blocked the entire worker pool"
+      }
     ],
-    "expected_keywords": ["read timeout", "blocked", "worker"],
-    "anti_keywords": ["memory", "auth", "kafka"]
+    "expected_keywords": [
+      "read timeout",
+      "blocked",
+      "worker"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "kafka"
+    ],
+    "gold": "the http client to upstream-x has no read timeout so 150 of 200 worker threads are blocked waiting; the service can no longer accept new connections. action: set a read timeout on the http client and bound the pool to fail fast."
   },
   {
     "id": "log_volume_self_dos",
     "logs": [
-      {"timestamp": "2026-05-06T11:10:00Z", "level": "INFO",  "trace_id": "t36", "message": "request handler logging at DEBUG: 8000 lines/req"},
-      {"timestamp": "2026-05-06T11:10:01Z", "level": "WARN",  "trace_id": "t36", "message": "stdout pipe is blocking; cpu 78% in write() syscalls"},
-      {"timestamp": "2026-05-06T11:10:01Z", "level": "ERROR", "trace_id": "t36", "message": "request latency p99=12s; root cause: app blocked writing to a slow log sink"}
+      {
+        "timestamp": "2026-05-06T11:10:00Z",
+        "level": "INFO",
+        "trace_id": "t36",
+        "message": "request handler logging at DEBUG: 8000 lines/req"
+      },
+      {
+        "timestamp": "2026-05-06T11:10:01Z",
+        "level": "WARN",
+        "trace_id": "t36",
+        "message": "stdout pipe is blocking; cpu 78% in write() syscalls"
+      },
+      {
+        "timestamp": "2026-05-06T11:10:01Z",
+        "level": "ERROR",
+        "trace_id": "t36",
+        "message": "request latency p99=12s; root cause: app blocked writing to a slow log sink"
+      }
     ],
-    "expected_keywords": ["log", "volume", "blocking"],
-    "anti_keywords": ["memory", "auth", "deadlock"]
+    "expected_keywords": [
+      "log",
+      "volume",
+      "blocking"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "deadlock"
+    ],
+    "gold": "debug logging is producing 8000 lines per request and stdout writes are blocking the request thread, pushing p99 to 12s. action: drop log level for the hot path, ship logs through an async sink, or non-blocking pipe."
   },
   {
     "id": "long_transaction_blocking",
     "logs": [
-      {"timestamp": "2026-05-06T11:11:00Z", "level": "INFO",  "trace_id": "t37", "message": "txn-X started: long-running ETL UPDATE on orders"},
-      {"timestamp": "2026-05-06T11:11:30Z", "level": "WARN",  "trace_id": "t37", "message": "300 unrelated SELECTs queued waiting for row lock held by txn-X"},
-      {"timestamp": "2026-05-06T11:11:30Z", "level": "ERROR", "trace_id": "t37", "message": "checkout p99=42s caused by long-running update transaction holding locks"}
+      {
+        "timestamp": "2026-05-06T11:11:00Z",
+        "level": "INFO",
+        "trace_id": "t37",
+        "message": "txn-X started: long-running ETL UPDATE on orders"
+      },
+      {
+        "timestamp": "2026-05-06T11:11:30Z",
+        "level": "WARN",
+        "trace_id": "t37",
+        "message": "300 unrelated SELECTs queued waiting for row lock held by txn-X"
+      },
+      {
+        "timestamp": "2026-05-06T11:11:30Z",
+        "level": "ERROR",
+        "trace_id": "t37",
+        "message": "checkout p99=42s caused by long-running update transaction holding locks"
+      }
     ],
-    "expected_keywords": ["long", "transaction", "lock"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "long",
+      "transaction",
+      "lock"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "an etl update transaction is holding row locks on the orders table for an extended period, blocking 300 unrelated checkouts. action: shorten the etl transaction (chunked updates), use a replica for read-heavy etl, or schedule it during low traffic."
   },
   {
     "id": "regex_redos",
     "logs": [
-      {"timestamp": "2026-05-06T11:12:00Z", "level": "INFO",  "trace_id": "t38", "message": "POST /validate received user input length=8192"},
-      {"timestamp": "2026-05-06T11:12:00Z", "level": "WARN",  "trace_id": "t38", "message": "regex /^(a+)+$/ matching against 'aaaa...!' for 4200ms"},
-      {"timestamp": "2026-05-06T11:12:05Z", "level": "ERROR", "trace_id": "t38", "message": "request timed out at proxy after 5s; cpu pinned at 100% on regex backtracking"}
+      {
+        "timestamp": "2026-05-06T11:12:00Z",
+        "level": "INFO",
+        "trace_id": "t38",
+        "message": "POST /validate received user input length=8192"
+      },
+      {
+        "timestamp": "2026-05-06T11:12:00Z",
+        "level": "WARN",
+        "trace_id": "t38",
+        "message": "regex /^(a+)+$/ matching against 'aaaa...!' for 4200ms"
+      },
+      {
+        "timestamp": "2026-05-06T11:12:05Z",
+        "level": "ERROR",
+        "trace_id": "t38",
+        "message": "request timed out at proxy after 5s; cpu pinned at 100% on regex backtracking"
+      }
     ],
-    "expected_keywords": ["regex", "backtracking", "redos"],
-    "anti_keywords": ["memory", "auth", "kafka"]
+    "expected_keywords": [
+      "regex",
+      "backtracking",
+      "redos"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "kafka"
+    ],
+    "gold": "the regex /^(a+)+$/ is exhibiting catastrophic backtracking on adversarial input and pinning cpu for 4+ seconds. action: rewrite the regex to be linear or switch to a regex engine without backtracking; cap input length at the boundary."
   },
   {
     "id": "wrong_db_timezone",
     "logs": [
-      {"timestamp": "2026-05-06T11:13:00Z", "level": "INFO",  "trace_id": "t39", "message": "scheduling reminder for user_local_time=09:00 IST"},
-      {"timestamp": "2026-05-06T11:13:00Z", "level": "WARN",  "trace_id": "t39", "message": "stored as 09:00 in db; db tz=UTC, app assumed IST"},
-      {"timestamp": "2026-05-06T11:13:00Z", "level": "ERROR", "trace_id": "t39", "message": "reminder fired 5h30m early for 12k users due to timezone mismatch between app and db"}
+      {
+        "timestamp": "2026-05-06T11:13:00Z",
+        "level": "INFO",
+        "trace_id": "t39",
+        "message": "scheduling reminder for user_local_time=09:00 IST"
+      },
+      {
+        "timestamp": "2026-05-06T11:13:00Z",
+        "level": "WARN",
+        "trace_id": "t39",
+        "message": "stored as 09:00 in db; db tz=UTC, app assumed IST"
+      },
+      {
+        "timestamp": "2026-05-06T11:13:00Z",
+        "level": "ERROR",
+        "trace_id": "t39",
+        "message": "reminder fired 5h30m early for 12k users due to timezone mismatch between app and db"
+      }
     ],
-    "expected_keywords": ["timezone", "tz", "utc"],
-    "anti_keywords": ["memory", "auth", "kafka"]
+    "expected_keywords": [
+      "timezone",
+      "tz",
+      "utc"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "kafka"
+    ],
+    "gold": "the application stored a local time without timezone info in a utc-typed db column so reminders fired 5h30m early for ist users. action: always store timestamptz, convert to utc at the boundary, and present in user-local time only at render."
   },
   {
     "id": "premature_traffic_pre_warmup",
     "logs": [
-      {"timestamp": "2026-05-06T11:14:00Z", "level": "INFO",  "trace_id": "t40", "message": "k8s readiness probe passed at t=2s after start"},
-      {"timestamp": "2026-05-06T11:14:00Z", "level": "WARN",  "trace_id": "t40", "message": "jit warmup not complete; first 30s p99=8s vs steady state p99=200ms"},
-      {"timestamp": "2026-05-06T11:14:00Z", "level": "ERROR", "trace_id": "t40", "message": "rolling deploy: every new pod served 30s of slow traffic before warm; cumulative spike"}
+      {
+        "timestamp": "2026-05-06T11:14:00Z",
+        "level": "INFO",
+        "trace_id": "t40",
+        "message": "k8s readiness probe passed at t=2s after start"
+      },
+      {
+        "timestamp": "2026-05-06T11:14:00Z",
+        "level": "WARN",
+        "trace_id": "t40",
+        "message": "jit warmup not complete; first 30s p99=8s vs steady state p99=200ms"
+      },
+      {
+        "timestamp": "2026-05-06T11:14:00Z",
+        "level": "ERROR",
+        "trace_id": "t40",
+        "message": "rolling deploy: every new pod served 30s of slow traffic before warm; cumulative spike"
+      }
     ],
-    "expected_keywords": ["warmup", "readiness", "premature"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "warmup",
+      "readiness",
+      "premature"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "the readiness probe goes green at t=2s but the jvm jit isn't warm until ~30s, so each rolling-deploy pod served slow traffic for half a minute. action: add a warmup hook (synthetic requests) before /readyz turns green; or use a slower probe initial-delay."
   },
   {
     "id": "leader_election_race_double_run",
     "logs": [
-      {"timestamp": "2026-05-06T11:15:00Z", "level": "INFO",  "trace_id": "t41", "message": "node-A acquired leader lease for nightly-billing"},
-      {"timestamp": "2026-05-06T11:15:00Z", "level": "INFO",  "trace_id": "t41", "message": "node-B acquired leader lease for nightly-billing (lease ttl race)"},
-      {"timestamp": "2026-05-06T11:15:30Z", "level": "ERROR", "trace_id": "t41", "message": "billing job ran twice for the same period; duplicate invoice rows in stripe"}
+      {
+        "timestamp": "2026-05-06T11:15:00Z",
+        "level": "INFO",
+        "trace_id": "t41",
+        "message": "node-A acquired leader lease for nightly-billing"
+      },
+      {
+        "timestamp": "2026-05-06T11:15:00Z",
+        "level": "INFO",
+        "trace_id": "t41",
+        "message": "node-B acquired leader lease for nightly-billing (lease ttl race)"
+      },
+      {
+        "timestamp": "2026-05-06T11:15:30Z",
+        "level": "ERROR",
+        "trace_id": "t41",
+        "message": "billing job ran twice for the same period; duplicate invoice rows in stripe"
+      }
     ],
-    "expected_keywords": ["leader", "election", "duplicate"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "leader",
+      "election",
+      "duplicate"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "two nodes acquired the leader lease for nightly-billing because of a ttl race in the election protocol; the job ran twice. action: use fencing tokens or a single-writer guarantee (e.g. transactional outbox) so duplicate execution can't produce duplicate side effects."
   },
   {
     "id": "upstream_breaking_change",
     "logs": [
-      {"timestamp": "2026-05-06T11:16:00Z", "level": "INFO",  "trace_id": "t42", "message": "calling partner /v1/charge with field 'amount_cents'"},
-      {"timestamp": "2026-05-06T11:16:00Z", "level": "WARN",  "trace_id": "t42", "message": "partner response: 400 unknown_field amount_cents (expected 'amount_minor_units')"},
-      {"timestamp": "2026-05-06T11:16:00Z", "level": "ERROR", "trace_id": "t42", "message": "all charges failing; partner deployed breaking field rename without versioning"}
+      {
+        "timestamp": "2026-05-06T11:16:00Z",
+        "level": "INFO",
+        "trace_id": "t42",
+        "message": "calling partner /v1/charge with field 'amount_cents'"
+      },
+      {
+        "timestamp": "2026-05-06T11:16:00Z",
+        "level": "WARN",
+        "trace_id": "t42",
+        "message": "partner response: 400 unknown_field amount_cents (expected 'amount_minor_units')"
+      },
+      {
+        "timestamp": "2026-05-06T11:16:00Z",
+        "level": "ERROR",
+        "trace_id": "t42",
+        "message": "all charges failing; partner deployed breaking field rename without versioning"
+      }
     ],
-    "expected_keywords": ["upstream", "breaking", "field"],
-    "anti_keywords": ["memory", "deadlock", "kafka"]
+    "expected_keywords": [
+      "upstream",
+      "breaking",
+      "field"
+    ],
+    "anti_keywords": [
+      "memory",
+      "deadlock",
+      "kafka"
+    ],
+    "gold": "the partner renamed amount_cents to amount_minor_units without a versioned endpoint, so every charge now fails with 400. action: pin to a versioned partner endpoint; fall back to a feature-flagged code path that uses the new field name."
   },
   {
     "id": "egress_blocked_by_proxy",
     "logs": [
-      {"timestamp": "2026-05-06T11:17:00Z", "level": "INFO",  "trace_id": "t43", "message": "outbound https://api.partner.example via corp proxy 10.0.0.5:3128"},
-      {"timestamp": "2026-05-06T11:17:01Z", "level": "ERROR", "trace_id": "t43", "message": "proxy 403 Forbidden: destination not in allowlist (request_id=cp-9821)"},
-      {"timestamp": "2026-05-06T11:17:01Z", "level": "ERROR", "trace_id": "t43", "message": "all partner.example calls blocked; security team's egress allowlist out of date"}
+      {
+        "timestamp": "2026-05-06T11:17:00Z",
+        "level": "INFO",
+        "trace_id": "t43",
+        "message": "outbound https://api.partner.example via corp proxy 10.0.0.5:3128"
+      },
+      {
+        "timestamp": "2026-05-06T11:17:01Z",
+        "level": "ERROR",
+        "trace_id": "t43",
+        "message": "proxy 403 Forbidden: destination not in allowlist (request_id=cp-9821)"
+      },
+      {
+        "timestamp": "2026-05-06T11:17:01Z",
+        "level": "ERROR",
+        "trace_id": "t43",
+        "message": "all partner.example calls blocked; security team's egress allowlist out of date"
+      }
     ],
-    "expected_keywords": ["proxy", "egress", "allowlist"],
-    "anti_keywords": ["memory", "kafka", "auth"]
+    "expected_keywords": [
+      "proxy",
+      "egress",
+      "allowlist"
+    ],
+    "anti_keywords": [
+      "memory",
+      "kafka",
+      "auth"
+    ],
+    "gold": "the corporate egress proxy is blocking https://api.partner.example because it is not in the allowlist, so all partner calls return 403. action: get the destination added to the egress allowlist and add a synthetic check that watches for proxy 403s."
   },
   {
     "id": "service_mesh_misroute",
     "logs": [
-      {"timestamp": "2026-05-06T11:18:00Z", "level": "INFO",  "trace_id": "t44", "message": "outbound to checkout.svc.cluster.local"},
-      {"timestamp": "2026-05-06T11:18:00Z", "level": "WARN",  "trace_id": "t44", "message": "envoy x-cluster=checkout-staging instead of checkout-prod"},
-      {"timestamp": "2026-05-06T11:18:00Z", "level": "ERROR", "trace_id": "t44", "message": "production traffic routed to staging cluster; recent virtualservice change introduced a bad selector"}
+      {
+        "timestamp": "2026-05-06T11:18:00Z",
+        "level": "INFO",
+        "trace_id": "t44",
+        "message": "outbound to checkout.svc.cluster.local"
+      },
+      {
+        "timestamp": "2026-05-06T11:18:00Z",
+        "level": "WARN",
+        "trace_id": "t44",
+        "message": "envoy x-cluster=checkout-staging instead of checkout-prod"
+      },
+      {
+        "timestamp": "2026-05-06T11:18:00Z",
+        "level": "ERROR",
+        "trace_id": "t44",
+        "message": "production traffic routed to staging cluster; recent virtualservice change introduced a bad selector"
+      }
     ],
-    "expected_keywords": ["service mesh", "envoy", "route"],
-    "anti_keywords": ["memory", "auth", "kafka"]
+    "expected_keywords": [
+      "service mesh",
+      "envoy",
+      "route"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "kafka"
+    ],
+    "gold": "an envoy virtualservice rule selector now matches production traffic and routes it to the staging cluster. action: revert the virtualservice change and add an integration check that pins prod -> prod cluster."
   },
   {
     "id": "stuck_consumer_rebalance",
     "logs": [
-      {"timestamp": "2026-05-06T11:19:00Z", "level": "INFO",  "trace_id": "t45", "message": "kafka group orders-consumer state=PreparingRebalance generation=42"},
-      {"timestamp": "2026-05-06T11:19:30Z", "level": "WARN",  "trace_id": "t45", "message": "rebalance taking >30s; one member is unresponsive (member_id=k-7e00e78d)"},
-      {"timestamp": "2026-05-06T11:20:30Z", "level": "ERROR", "trace_id": "t45", "message": "consumer group stuck in PreparingRebalance for 90s; lag growing 8000/s"}
+      {
+        "timestamp": "2026-05-06T11:19:00Z",
+        "level": "INFO",
+        "trace_id": "t45",
+        "message": "kafka group orders-consumer state=PreparingRebalance generation=42"
+      },
+      {
+        "timestamp": "2026-05-06T11:19:30Z",
+        "level": "WARN",
+        "trace_id": "t45",
+        "message": "rebalance taking >30s; one member is unresponsive (member_id=k-7e00e78d)"
+      },
+      {
+        "timestamp": "2026-05-06T11:20:30Z",
+        "level": "ERROR",
+        "trace_id": "t45",
+        "message": "consumer group stuck in PreparingRebalance for 90s; lag growing 8000/s"
+      }
     ],
-    "expected_keywords": ["rebalance", "stuck", "consumer"],
-    "anti_keywords": ["memory", "auth", "tls"]
+    "expected_keywords": [
+      "rebalance",
+      "stuck",
+      "consumer"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "tls"
+    ],
+    "gold": "the kafka consumer group is stuck in PreparingRebalance because one member is unresponsive; lag is growing fast. action: kick the unresponsive member (force exit), tighten session.timeout.ms, and investigate the slow member."
   },
   {
     "id": "memory_fragmentation_jvm",
     "logs": [
-      {"timestamp": "2026-05-06T11:20:00Z", "level": "INFO",  "trace_id": "t46", "message": "g1 gc full=12 mixed=300 young=4500 in last hour"},
-      {"timestamp": "2026-05-06T11:20:01Z", "level": "WARN",  "trace_id": "t46", "message": "old gen humongous regions=24% (threshold 40%); fragmentation rising"},
-      {"timestamp": "2026-05-06T11:20:02Z", "level": "ERROR", "trace_id": "t46", "message": "to-space exhausted during young gc; full gc pause 8s caused by humongous allocation"}
+      {
+        "timestamp": "2026-05-06T11:20:00Z",
+        "level": "INFO",
+        "trace_id": "t46",
+        "message": "g1 gc full=12 mixed=300 young=4500 in last hour"
+      },
+      {
+        "timestamp": "2026-05-06T11:20:01Z",
+        "level": "WARN",
+        "trace_id": "t46",
+        "message": "old gen humongous regions=24% (threshold 40%); fragmentation rising"
+      },
+      {
+        "timestamp": "2026-05-06T11:20:02Z",
+        "level": "ERROR",
+        "trace_id": "t46",
+        "message": "to-space exhausted during young gc; full gc pause 8s caused by humongous allocation"
+      }
     ],
-    "expected_keywords": ["gc", "fragmentation", "humongous"],
-    "anti_keywords": ["auth", "tls", "kafka"]
+    "expected_keywords": [
+      "gc",
+      "fragmentation",
+      "humongous"
+    ],
+    "anti_keywords": [
+      "auth",
+      "tls",
+      "kafka"
+    ],
+    "gold": "g1gc is running into to-space exhaustion during young gc because humongous regions have fragmented the old generation. action: tune G1HeapRegionSize larger or refactor the allocation pattern that produces humongous objects (large strings/arrays)."
   },
   {
     "id": "cookie_request_too_large",
     "logs": [
-      {"timestamp": "2026-05-06T11:21:00Z", "level": "INFO",  "trace_id": "t47", "message": "incoming GET /me with 18 cookies size=42KB"},
-      {"timestamp": "2026-05-06T11:21:00Z", "level": "WARN",  "trace_id": "t47", "message": "nginx returned 431 Request Header Fields Too Large"},
-      {"timestamp": "2026-05-06T11:21:00Z", "level": "ERROR", "trace_id": "t47", "message": "users with stale auth cookies + tracking cookies + experiment cookies hit the 32KB limit"}
+      {
+        "timestamp": "2026-05-06T11:21:00Z",
+        "level": "INFO",
+        "trace_id": "t47",
+        "message": "incoming GET /me with 18 cookies size=42KB"
+      },
+      {
+        "timestamp": "2026-05-06T11:21:00Z",
+        "level": "WARN",
+        "trace_id": "t47",
+        "message": "nginx returned 431 Request Header Fields Too Large"
+      },
+      {
+        "timestamp": "2026-05-06T11:21:00Z",
+        "level": "ERROR",
+        "trace_id": "t47",
+        "message": "users with stale auth cookies + tracking cookies + experiment cookies hit the 32KB limit"
+      }
     ],
-    "expected_keywords": ["cookie", "header", "too large"],
-    "anti_keywords": ["memory", "kafka", "deadlock"]
+    "expected_keywords": [
+      "cookie",
+      "header",
+      "too large"
+    ],
+    "anti_keywords": [
+      "memory",
+      "kafka",
+      "deadlock"
+    ],
+    "gold": "the user's accumulated cookies exceed nginx's request header limit and the proxy is returning 431 before the request reaches the app. action: prune unused cookies, raise large_client_header_buffers, or move tracking state out of cookies entirely."
   },
   {
     "id": "dns_blackhole",
     "logs": [
-      {"timestamp": "2026-05-06T11:22:00Z", "level": "INFO",  "trace_id": "t48", "message": "starting outbound calls; resolv.conf nameserver=10.0.0.99"},
-      {"timestamp": "2026-05-06T11:22:00Z", "level": "WARN",  "trace_id": "t48", "message": "resolver 10.0.0.99 not responding to queries (timeouts)"},
-      {"timestamp": "2026-05-06T11:22:30Z", "level": "ERROR", "trace_id": "t48", "message": "all outbound https calls failing with NameResolutionError; resolver IP is wrong after recent vpc change"}
+      {
+        "timestamp": "2026-05-06T11:22:00Z",
+        "level": "INFO",
+        "trace_id": "t48",
+        "message": "starting outbound calls; resolv.conf nameserver=10.0.0.99"
+      },
+      {
+        "timestamp": "2026-05-06T11:22:00Z",
+        "level": "WARN",
+        "trace_id": "t48",
+        "message": "resolver 10.0.0.99 not responding to queries (timeouts)"
+      },
+      {
+        "timestamp": "2026-05-06T11:22:30Z",
+        "level": "ERROR",
+        "trace_id": "t48",
+        "message": "all outbound https calls failing with NameResolutionError; resolver IP is wrong after recent vpc change"
+      }
     ],
-    "expected_keywords": ["dns", "resolver", "nameserver"],
-    "anti_keywords": ["auth", "rate", "memory"]
+    "expected_keywords": [
+      "dns",
+      "resolver",
+      "nameserver"
+    ],
+    "anti_keywords": [
+      "auth",
+      "rate",
+      "memory"
+    ],
+    "gold": "the configured nameserver in resolv.conf is unreachable after the recent vpc change, so all outbound dns is failing. action: fix /etc/resolv.conf or the dhcp option set; add a synthetic dns check."
   },
   {
     "id": "hot_pk_sequence_bottleneck",
     "logs": [
-      {"timestamp": "2026-05-06T11:23:00Z", "level": "INFO",  "trace_id": "t49", "message": "INSERT into events; sequence events_id_seq nextval contention"},
-      {"timestamp": "2026-05-06T11:23:00Z", "level": "WARN",  "trace_id": "t49", "message": "events_id_seq advisory lock held p99=80ms; insert throughput plateaued at 8000/s"},
-      {"timestamp": "2026-05-06T11:23:01Z", "level": "ERROR", "trace_id": "t49", "message": "single hot sequence is the bottleneck during peak; consider sharding or uuid v7"}
+      {
+        "timestamp": "2026-05-06T11:23:00Z",
+        "level": "INFO",
+        "trace_id": "t49",
+        "message": "INSERT into events; sequence events_id_seq nextval contention"
+      },
+      {
+        "timestamp": "2026-05-06T11:23:00Z",
+        "level": "WARN",
+        "trace_id": "t49",
+        "message": "events_id_seq advisory lock held p99=80ms; insert throughput plateaued at 8000/s"
+      },
+      {
+        "timestamp": "2026-05-06T11:23:01Z",
+        "level": "ERROR",
+        "trace_id": "t49",
+        "message": "single hot sequence is the bottleneck during peak; consider sharding or uuid v7"
+      }
     ],
-    "expected_keywords": ["sequence", "hot", "bottleneck"],
-    "anti_keywords": ["auth", "tls", "memory"]
+    "expected_keywords": [
+      "sequence",
+      "hot",
+      "bottleneck"
+    ],
+    "anti_keywords": [
+      "auth",
+      "tls",
+      "memory"
+    ],
+    "gold": "the events_id_seq sequence is the throughput bottleneck on inserts during peak. action: switch to ulid/uuid v7 for the primary key or shard the sequence, removing the single-point of contention."
   },
   {
     "id": "deploy_rollout_partial",
     "logs": [
-      {"timestamp": "2026-05-06T11:24:00Z", "level": "INFO",  "trace_id": "t50", "message": "rolling deploy: 3/10 pods on new image v1.2.3, 7/10 on v1.2.2"},
-      {"timestamp": "2026-05-06T11:24:30Z", "level": "WARN",  "trace_id": "t50", "message": "v1.2.3 introduced new request field; v1.2.2 pods 400 on those requests"},
-      {"timestamp": "2026-05-06T11:24:30Z", "level": "ERROR", "trace_id": "t50", "message": "30% of traffic failing during deploy: incompatible request schema across pod versions"}
+      {
+        "timestamp": "2026-05-06T11:24:00Z",
+        "level": "INFO",
+        "trace_id": "t50",
+        "message": "rolling deploy: 3/10 pods on new image v1.2.3, 7/10 on v1.2.2"
+      },
+      {
+        "timestamp": "2026-05-06T11:24:30Z",
+        "level": "WARN",
+        "trace_id": "t50",
+        "message": "v1.2.3 introduced new request field; v1.2.2 pods 400 on those requests"
+      },
+      {
+        "timestamp": "2026-05-06T11:24:30Z",
+        "level": "ERROR",
+        "trace_id": "t50",
+        "message": "30% of traffic failing during deploy: incompatible request schema across pod versions"
+      }
     ],
-    "expected_keywords": ["deploy", "rollout", "incompatible"],
-    "anti_keywords": ["memory", "auth", "kafka"]
+    "expected_keywords": [
+      "deploy",
+      "rollout",
+      "incompatible"
+    ],
+    "anti_keywords": [
+      "memory",
+      "auth",
+      "kafka"
+    ],
+    "gold": "during the rolling deploy, v1.2.3 introduced a request schema field that v1.2.2 pods reject as 400; for the duration of the rollout, ~30% of traffic fails. action: make schema changes additive and backwards-compatible, or use a request-shape feature flag with a deploy-then-enable sequence."
   }
 ]

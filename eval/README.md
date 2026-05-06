@@ -43,17 +43,16 @@ prints a per-case delta + aggregate side-by-side. arrows mark cases where one ve
 
 ## scoring
 
-```
-keyword_hit  = expected_keywords matched in analysis (case-insensitive substring) / len(expected_keywords)
-anti_clean   = anti_keywords absent in analysis / len(anti_keywords)
-case_score   = 0.7 * keyword_hit + 0.3 * anti_clean
-aggregate    = mean(case_score) across successful cases
-```
+each case has a hand-written `gold` answer (1-2 sentences capturing the right root cause and action) and `expected_keywords` / `anti_keywords` for the legacy keyword scorer.
 
-a case is "passing" if `case_score >= 0.7`. look at per-case results, not just the aggregate.
+three modes (`--scorer`):
+- `keyword` — legacy. `0.7*keyword_hit + 0.3*anti_clean`.
+- `embedding` — `cosine(embed(analysis), embed(gold))` using azure openai `text-embedding-3-small`. embeddings are deterministic and cached to `eval/.embed_cache.json` so the gold answers are embedded once.
+- `both` (default) — `0.5*keyword + 0.5*embedding`. catches both vocabulary and semantic mismatches.
+
+a case is "passing" if `case_score >= 0.7`. embedding similarity is a stronger signal than keyword match but is not ground truth — it rewards answers that *sound* like the gold answer, not necessarily ones that are operationally correct.
 
 ## what's still missing (deliberate, not pretending)
 
-- structured outputs scored against named fields (root_cause, category) instead of free text. v3 prompt already populates them; the scorer doesn't yet use them.
-- agreement metric across multiple llm runs (same case, same prompt, multiple seeds).
-- gold-standard analyses written by a human, scored via embedding similarity instead of keyword match.
+- structured outputs scored against named fields (root_cause, category) instead of free text. v3 prompt already populates them; the scorer doesn't yet use them directly.
+- agreement metric across multiple llm runs (same case, same prompt, multiple seeds) — coming next.

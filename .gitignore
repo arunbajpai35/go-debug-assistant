@@ -21,3 +21,7 @@ venv/
 
 # Node
 node_modules/
+
+# eval
+eval/.embed_cache.json
+eval/results-*.json
