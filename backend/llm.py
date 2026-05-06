@@ -17,6 +17,8 @@ from backend.config import (
     LLM_TIMEOUT_SECONDS,
     PROMPT_VERSION,
 )
+from backend.llm_schema import AnalysisResult, parse_v2_text, parse_v3_json
+from backend.prompts import STRUCTURED_VERSIONS
 from backend.prompts import get as get_prompt
 
 log = logging.getLogger(__name__)
@@ -54,11 +56,38 @@ def client() -> AzureOpenAI:
     return _client
 
 
-def analyze(log_text: str, window_seconds: int, version: str | None = None) -> tuple[str, str, str]:
-    """returns (analysis_text, model_name, prompt_version).
-    raises BudgetExceeded if today's estimated spend already meets the daily limit.
-    raises CircuitOpen if the breaker is currently open after repeated failures.
-    retries rate limits / 5xx within a single call; the breaker tracks call-level success/failure."""
+def _enrich(result: AnalysisResult) -> AnalysisResult:
+    """fill structured fields from the raw text best-effort, based on prompt version."""
+    if result.prompt_version in STRUCTURED_VERSIONS:
+        parsed = parse_v3_json(result.raw_text)
+    elif result.prompt_version == "v2":
+        parsed = parse_v2_text(result.raw_text)
+    else:
+        return result
+
+    if isinstance(parsed.get("category"), str):
+        result.category = parsed["category"].strip().lower()
+    if isinstance(parsed.get("root_cause"), str):
+        result.root_cause = parsed["root_cause"].strip()
+    if isinstance(parsed.get("next_step"), str):
+        result.next_step = parsed["next_step"].strip()
+    if isinstance(parsed.get("evidence"), list):
+        result.evidence = [str(x) for x in parsed["evidence"]]
+    elif isinstance(parsed.get("evidence"), str):
+        result.evidence = [v.strip() for v in parsed["evidence"].split(",") if v.strip()]
+    if isinstance(parsed.get("confidence"), str):
+        result.confidence = parsed["confidence"].strip().lower()
+    return result
+
+
+def analyze(log_text: str, window_seconds: int, version: str | None = None) -> AnalysisResult:
+    """returns an AnalysisResult with raw_text always populated. structured fields
+    (category / root_cause / next_step / evidence / confidence) are filled when the prompt
+    version is structured (v3) or parseable (v2).
+
+    raises BudgetExceeded when today's spend meets the daily limit.
+    raises CircuitOpen when the breaker is currently open.
+    retries rate limits / 5xx within a single call; the breaker tracks call-level outcome."""
     budget.check()
     breaker.before_call()
     _publish_state()
@@ -67,18 +96,22 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> t
     system, user_template = get_prompt(v)
     user_msg = user_template.format(window=window_seconds, log_text=log_text)
 
+    request_kwargs: dict = {
+        "model": AZURE_OPENAI_DEPLOYMENT,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_msg},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 400,
+    }
+    if v in STRUCTURED_VERSIONS:
+        request_kwargs["response_format"] = {"type": "json_object"}
+
     last_err: Exception | None = None
     for attempt in range(LLM_MAX_RETRIES + 1):
         try:
-            resp = client().chat.completions.create(
-                model=AZURE_OPENAI_DEPLOYMENT,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg},
-                ],
-                temperature=0.2,
-                max_tokens=400,
-            )
+            resp = client().chat.completions.create(**request_kwargs)
             usage = resp.usage
             if usage is not None:
                 spent = budget.record(
@@ -96,10 +129,10 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> t
                         "budget_spent_usd": round(spent, 6),
                     },
                 )
-            content = resp.choices[0].message.content or ""
+            content = (resp.choices[0].message.content or "").strip()
             breaker.on_success()
             _publish_state()
-            return content.strip(), AZURE_OPENAI_DEPLOYMENT, v
+            return _enrich(AnalysisResult(raw_text=content, model=AZURE_OPENAI_DEPLOYMENT, prompt_version=v))
         except RateLimitError as e:
             last_err = e
             wait = 2**attempt

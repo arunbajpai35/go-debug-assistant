@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from backend import pipeline
+from backend.llm_schema import AnalysisResult
 
 SAMPLE_LOGS = [
     {"timestamp": "2026-05-06T10:00:00Z", "trace_id": "t1", "level": "ERROR", "message": "boom"},
@@ -9,9 +10,26 @@ SAMPLE_LOGS = [
 ]
 
 
+def _result(text: str = "ok", **kw) -> AnalysisResult:
+    base: dict = {"raw_text": text, "model": "gpt-4o-mini", "prompt_version": "v3"}
+    base.update(kw)
+    return AnalysisResult(**base)
+
+
 def test_pipeline_runs_one_llm_call_per_trace_bundle_and_batches_persist():
     with (
-        patch("backend.pipeline.llm.analyze", return_value=("root_cause: db timeout", "gpt-4o-mini", "v2")) as analyze,
+        patch(
+            "backend.pipeline.llm.analyze",
+            return_value=_result(
+                text='{"category":"db","root_cause":"db timeout","next_step":"check pool",'
+                     '"evidence":["10:00:00"],"confidence":"high"}',
+                category="db",
+                root_cause="db timeout",
+                next_step="check pool",
+                evidence=["10:00:00"],
+                confidence="high",
+            ),
+        ) as analyze,
         patch("backend.pipeline.db.save_analyses_batch") as save_batch,
         patch("backend.pipeline.db.save_raw_logs_batch") as save_raw,
     ):
@@ -20,13 +38,15 @@ def test_pipeline_runs_one_llm_call_per_trace_bundle_and_batches_persist():
     assert {r["trace_id"] for r in results} == {"t1", "t2"}
     assert analyze.call_count == 2
     assert save_batch.call_count == 1
-    assert len(save_batch.call_args.args[0]) == 2
-    # raw_logs persistence runs once with all input logs (drops untraced ones inside db.py)
+    rows = save_batch.call_args.args[0]
+    assert len(rows) == 2
+    # 10-tuple shape
+    assert all(len(r) == 10 for r in rows)
+    # parsed fields persisted
+    assert all(r[5] == "db" for r in rows)
+    assert all(r[6] == "db timeout" for r in rows)
+    assert all(r[9] == "high" for r in rows)
     assert save_raw.call_count == 1
-    assert save_raw.call_args.args[0] == SAMPLE_LOGS
-    for r in results:
-        assert r["analysis"].startswith("root_cause:")
-        assert r["model"] == "gpt-4o-mini"
 
 
 def test_pipeline_skips_failed_bundle_and_persists_successful_one():
@@ -36,7 +56,7 @@ def test_pipeline_skips_failed_bundle_and_persists_successful_one():
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("simulated rate limit")
-        return ("ok", "gpt-4o-mini", "v2")
+        return _result()
 
     with (
         patch("backend.pipeline.llm.analyze", side_effect=fail_first),
@@ -60,14 +80,12 @@ def test_pipeline_does_not_persist_analyses_when_llm_fails_for_all():
 
     assert results == []
     assert save_batch.call_count == 0
-    # raw_logs still persisted even when llm is fully down — that's the whole point of having them
     assert save_raw.call_count == 1
 
 
 def test_pipeline_continues_when_raw_logs_persistence_fails():
-    """raw_logs is best-effort: a save failure must not block correlation + analysis."""
     with (
-        patch("backend.pipeline.llm.analyze", return_value=("ok", "gpt-4o-mini", "v2")),
+        patch("backend.pipeline.llm.analyze", return_value=_result()),
         patch("backend.pipeline.db.save_analyses_batch") as save_batch,
         patch("backend.pipeline.db.save_raw_logs_batch", side_effect=RuntimeError("disk full")),
     ):
@@ -75,3 +93,22 @@ def test_pipeline_continues_when_raw_logs_persistence_fails():
 
     assert len(results) == 2
     assert save_batch.call_count == 1
+
+
+def test_pipeline_persists_nullable_structured_fields_for_v1_prompt():
+    """v1 prompts return free text only — structured fields stay None."""
+    with (
+        patch("backend.pipeline.llm.analyze", return_value=_result(text="just some text", prompt_version="v1")),
+        patch("backend.pipeline.db.save_analyses_batch") as save_batch,
+        patch("backend.pipeline.db.save_raw_logs_batch"),
+    ):
+        pipeline.process(SAMPLE_LOGS, window_seconds=60)
+
+    rows = save_batch.call_args.args[0]
+    # category, root_cause, next_step, evidence_json, confidence should all be None
+    for r in rows:
+        assert r[5] is None
+        assert r[6] is None
+        assert r[7] is None
+        assert r[8] is None
+        assert r[9] is None

@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -32,7 +33,7 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
         root.set_attribute("bundles.count", len(bundles))
 
         results: list[dict] = []
-        rows: list[tuple[str, str, str, str, str]] = []
+        rows: list[db.AnalysisRow] = []
         for trace_id, bundle in bundles.items():
             with tracer.start_as_current_span("process_bundle") as span:
                 span.set_attribute("trace_id", trace_id)
@@ -41,24 +42,47 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
                 try:
                     with tracer.start_as_current_span("llm.analyze") as llm_span:
                         t0 = time.perf_counter()
-                        analysis, model, prompt_version = llm.analyze(text, window_seconds)
+                        result = llm.analyze(text, window_seconds)
                         metrics.llm_latency.observe(time.perf_counter() - t0)
                         metrics.llm_calls.labels(status="ok").inc()
-                        llm_span.set_attribute("prompt.version", prompt_version)
+                        llm_span.set_attribute("prompt.version", result.prompt_version)
+                        if result.category:
+                            llm_span.set_attribute("analysis.category", result.category)
+                        if result.confidence:
+                            llm_span.set_attribute("analysis.confidence", result.confidence)
                 except Exception:
                     metrics.llm_calls.labels(status="error").inc()
                     span.set_attribute("error", True)
                     log.exception("llm analyze failed trace_id=%s", trace_id)
                     continue
 
-                rows.append((trace_id, text, analysis, model, prompt_version))
+                evidence_json = json.dumps(result.evidence) if result.evidence else None
+                rows.append(
+                    (
+                        trace_id,
+                        text,
+                        result.raw_text,
+                        result.model,
+                        result.prompt_version,
+                        result.category,
+                        result.root_cause,
+                        result.next_step,
+                        evidence_json,
+                        result.confidence,
+                    )
+                )
                 results.append(
                     {
                         "trace_id": trace_id,
                         "log_text": text,
-                        "analysis": analysis,
-                        "model": model,
-                        "prompt_version": prompt_version,
+                        "analysis": result.raw_text,
+                        "model": result.model,
+                        "prompt_version": result.prompt_version,
+                        "category": result.category,
+                        "root_cause": result.root_cause,
+                        "next_step": result.next_step,
+                        "evidence": result.evidence,
+                        "confidence": result.confidence,
                     }
                 )
 

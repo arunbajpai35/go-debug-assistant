@@ -66,10 +66,17 @@ def main() -> int:
         text = format_window(bundle)
         t0 = time.perf_counter()
         try:
-            analysis, model, used_version = llm.analyze(text, WINDOW_SECONDS, version=args.version)
+            res = llm.analyze(text, WINDOW_SECONDS, version=args.version)
+            analysis = res.raw_text
+            model = res.model
+            used_version = res.prompt_version
+            category = res.category
+            confidence = res.confidence
             err = None
         except Exception as e:
-            analysis, model, used_version, err = "", "", args.version, str(e)
+            analysis, model, used_version = "", "", args.version
+            category, confidence = None, None
+            err = str(e)
         latency_s = round(time.perf_counter() - t0, 3)
 
         scored = score_case(analysis, c["expected_keywords"], c["anti_keywords"])
@@ -78,6 +85,8 @@ def main() -> int:
             "trace_id": trace_id,
             "model": model,
             "prompt_version": used_version,
+            "category": category,
+            "confidence": confidence,
             "latency_s": latency_s,
             "analysis": analysis,
             "error": err,
