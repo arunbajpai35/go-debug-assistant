@@ -3,6 +3,7 @@ import time
 
 from openai import APIError, AzureOpenAI, RateLimitError
 
+from backend.budget import budget
 from backend.config import (
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_DEPLOYMENT,
@@ -37,7 +38,10 @@ def client() -> AzureOpenAI:
 
 def analyze(log_text: str, window_seconds: int, version: str | None = None) -> tuple[str, str, str]:
     """returns (analysis_text, model_name, prompt_version).
-    retries on rate limits with exponential backoff."""
+    retries on rate limits with exponential backoff. raises BudgetExceeded if today's
+    estimated spend already meets or exceeds LLM_DAILY_BUDGET_USD."""
+    budget.check()
+
     v = version or PROMPT_VERSION
     system, user_template = get_prompt(v)
     user_msg = user_template.format(window=window_seconds, log_text=log_text)
@@ -54,6 +58,23 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> t
                 temperature=0.2,
                 max_tokens=400,
             )
+            usage = resp.usage
+            if usage is not None:
+                spent = budget.record(
+                    AZURE_OPENAI_DEPLOYMENT,
+                    usage.prompt_tokens or 0,
+                    usage.completion_tokens or 0,
+                )
+                log.info(
+                    "llm call ok",
+                    extra={
+                        "prompt_version": v,
+                        "model": AZURE_OPENAI_DEPLOYMENT,
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                        "budget_spent_usd": round(spent, 6),
+                    },
+                )
             content = resp.choices[0].message.content or ""
             return content.strip(), AZURE_OPENAI_DEPLOYMENT, v
         except RateLimitError as e:
