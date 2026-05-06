@@ -3,12 +3,16 @@ import time
 
 from openai import APIError, AzureOpenAI, RateLimitError
 
+from backend import metrics as m
 from backend.budget import budget
+from backend.circuit_breaker import CircuitBreaker, State
 from backend.config import (
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_DEPLOYMENT,
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_KEY,
+    LLM_CB_COOLDOWN_SECONDS,
+    LLM_CB_FAILURE_THRESHOLD,
     LLM_MAX_RETRIES,
     LLM_TIMEOUT_SECONDS,
     PROMPT_VERSION,
@@ -16,6 +20,20 @@ from backend.config import (
 from backend.prompts import get as get_prompt
 
 log = logging.getLogger(__name__)
+
+
+breaker = CircuitBreaker(
+    failure_threshold=LLM_CB_FAILURE_THRESHOLD,
+    cooldown_seconds=LLM_CB_COOLDOWN_SECONDS,
+    name="llm",
+)
+
+
+_STATE_VALUE = {State.CLOSED: 0, State.HALF_OPEN: 1, State.OPEN: 2}
+
+
+def _publish_state() -> None:
+    m.llm_circuit_state.set(_STATE_VALUE[breaker.state])
 
 
 _client: AzureOpenAI | None = None
@@ -38,9 +56,12 @@ def client() -> AzureOpenAI:
 
 def analyze(log_text: str, window_seconds: int, version: str | None = None) -> tuple[str, str, str]:
     """returns (analysis_text, model_name, prompt_version).
-    retries on rate limits with exponential backoff. raises BudgetExceeded if today's
-    estimated spend already meets or exceeds LLM_DAILY_BUDGET_USD."""
+    raises BudgetExceeded if today's estimated spend already meets the daily limit.
+    raises CircuitOpen if the breaker is currently open after repeated failures.
+    retries rate limits / 5xx within a single call; the breaker tracks call-level success/failure."""
     budget.check()
+    breaker.before_call()
+    _publish_state()
 
     v = version or PROMPT_VERSION
     system, user_template = get_prompt(v)
@@ -76,6 +97,8 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> t
                     },
                 )
             content = resp.choices[0].message.content or ""
+            breaker.on_success()
+            _publish_state()
             return content.strip(), AZURE_OPENAI_DEPLOYMENT, v
         except RateLimitError as e:
             last_err = e
@@ -88,4 +111,7 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> t
             if attempt == LLM_MAX_RETRIES:
                 break
             time.sleep(1)
+
+    breaker.on_failure()
+    _publish_state()
     raise RuntimeError(f"llm call failed after {LLM_MAX_RETRIES + 1} attempts: {last_err}")

@@ -42,3 +42,7 @@ PROMPT_VERSION = _env("PROMPT_VERSION", "v2")
 # safety knobs
 RATE_LIMIT_PER_MINUTE = int(_env("RATE_LIMIT_PER_MINUTE", "30"))
 LLM_DAILY_BUDGET_USD = float(_env("LLM_DAILY_BUDGET_USD", "5.0"))
+
+# circuit breaker: trip after N consecutive failures, cool down for X seconds
+LLM_CB_FAILURE_THRESHOLD = int(_env("LLM_CB_FAILURE_THRESHOLD", "5"))
+LLM_CB_COOLDOWN_SECONDS = float(_env("LLM_CB_COOLDOWN_SECONDS", "30"))

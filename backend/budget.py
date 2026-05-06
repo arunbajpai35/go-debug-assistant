@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 PRICES_PER_1K: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.00015, 0.00060),
     "gpt-4o": (0.00250, 0.01000),
+    "gpt-4.1-mini": (0.00040, 0.00160),
+    "gpt-4.1": (0.00200, 0.00800),
     "gpt-4": (0.03000, 0.06000),
     "gpt-35-turbo": (0.00050, 0.00150),
 }

@@ -9,3 +9,7 @@ analyses_persisted = Counter("analyses_persisted_total", "analyses written to po
 bundle_retries = Counter("bundle_retries_total", "bundle re-flush attempts after a failure")
 bundles_dlq = Counter("bundles_dlq_total", "bundles shipped to dead-letter topic after exceeding retry budget")
 worker_buffers = Gauge("worker_buffers", "number of trace_id buffers held by the kafka worker")
+llm_circuit_state = Gauge(
+    "llm_circuit_state",
+    "current llm circuit breaker state (0=closed, 1=half_open, 2=open)",
+)
