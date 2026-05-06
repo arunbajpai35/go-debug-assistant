@@ -67,6 +67,13 @@ python -m eval.compare eval/results-v1.json eval/results-v2.json
 
 prompts are versioned (`backend/prompts/v{N}.py`); `PROMPT_VERSION` env switches the live system. each persisted analysis records which version produced it (`analyses.prompt_version` column).
 
+## safety knobs
+
+- **per-ip sliding-window rate limit** on `/analyze`. `RATE_LIMIT_PER_MINUTE` env (default 30). 429 responses include a `retry-after` header. in-memory only — replace with redis-backed limiter for multi-replica deployments.
+- **daily llm $ budget cap**: `LLM_DAILY_BUDGET_USD` env (default 5.0). estimated from openai usage tokens × per-model price table; resets at utc midnight. once exceeded, `llm.analyze` raises `BudgetExceeded` and the pipeline records the bundle as failed instead of calling azure. `GET /budget` exposes current spend / remaining.
+
+both are guard rails, not invoices. real cost lives on azure's bill.
+
 ## tracing
 
 opentelemetry spans around `pipeline.process` → `correlate` → `llm.analyze` → `db.save_analysis`. fastapi + psycopg2 are auto-instrumented.
@@ -84,7 +91,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317 docker compose ...
 - no react dashboard. previous version had a textarea + json dump; it didn't add anything over `curl /analyze | jq`. dropped.
 - no multi-agent orchestration. previous version called three "agents" (root_cause / fix_suggester / impact) sequentially against the same log bundle. that's three llm calls for marginal extra signal. one prompt does the same job for 1/3 the cost and latency.
 - the eval set has 10 cases. that's enough to spot regressions, not enough to claim accuracy.
-- no auth, no rate limiting, no multi-tenant. single-deployment dev tool.
+- no auth, no multi-tenant. single-deployment dev tool. (per-ip rate limit + daily llm $ budget cap *are* in place — see below.)
 - the kafka worker has no dlq for poison messages yet — repeatedly-failing bundles loop. on the punchlist.
 
 ## run it

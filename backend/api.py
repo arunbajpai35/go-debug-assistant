@@ -11,7 +11,15 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend import db, log_setup, metrics, pipeline, tracing
-from backend.config import CORS_ORIGINS, MAX_LOGS_PER_REQUEST, WINDOW_SECONDS
+from backend.budget import budget as llm_budget
+from backend.config import (
+    CORS_ORIGINS,
+    LLM_DAILY_BUDGET_USD,
+    MAX_LOGS_PER_REQUEST,
+    RATE_LIMIT_PER_MINUTE,
+    WINDOW_SECONDS,
+)
+from backend.rate_limit import SlidingWindow
 
 log_setup.configure()
 tracing.init()
@@ -42,8 +50,38 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         db.close_pool()
 
 
-app = FastAPI(title="debug-assistant", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="debug-assistant", version="0.7.0", lifespan=lifespan)
 tracing.instrument_fastapi(app)
+
+_RATE_LIMITED_PATHS = {"/analyze"}
+_rate_limiter = SlidingWindow(limit=RATE_LIMIT_PER_MINUTE, window_seconds=60.0)
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path not in _RATE_LIMITED_PATHS:
+            return await call_next(request)
+        ip = _client_ip(request)
+        allowed, retry_after = _rate_limiter.check(ip)
+        if not allowed:
+            log.warning(
+                "rate limit hit",
+                extra={"ip": ip, "path": request.url.path, "retry_after_s": round(retry_after, 2)},
+            )
+            return Response(
+                '{"detail":"rate limit exceeded"}',
+                media_type="application/json",
+                status_code=429,
+                headers={"retry-after": str(int(retry_after) + 1)},
+            )
+        return await call_next(request)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -58,7 +96,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             log_setup.request_id_ctx.reset(token)
 
 
-app.add_middleware(RequestIdMiddleware)
+# add order = reverse of execution order. last add() runs outermost.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -66,11 +104,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True}
+
+
+@app.get("/budget")
+def budget_status() -> dict:
+    return {
+        "limit_usd": LLM_DAILY_BUDGET_USD,
+        "spent_usd": round(llm_budget.spent_usd, 6),
+        "remaining_usd": round(max(LLM_DAILY_BUDGET_USD - llm_budget.spent_usd, 0.0), 6),
+    }
 
 
 @app.get("/readyz")
