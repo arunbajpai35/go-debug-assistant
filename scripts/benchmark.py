@@ -61,6 +61,19 @@ def time_persistence(events: int, runs: int = 3) -> list[float]:
     return durations
 
 
+def time_persistence_batched(events: int, runs: int = 3) -> list[float]:
+    db.init_pool()
+    rows = [(f"bench-{i}", "log text", f"analysis {i}", "bench") for i in range(events)]
+    durations = []
+    for _ in range(runs):
+        with db.conn() as c, c.cursor() as cur:
+            cur.execute("delete from analyses where trace_id like 'bench-%'")
+        t0 = time.perf_counter()
+        db.save_analyses_batch(rows)
+        durations.append(time.perf_counter() - t0)
+    return durations
+
+
 def time_pipeline_stub_llm(logs: list[dict], runs: int = 3) -> list[float]:
     """end-to-end pipeline with the llm call stubbed (so we measure correlate + db,
     not network)."""
@@ -109,8 +122,12 @@ def main() -> None:
         print("DB_HOST not set; skipping db benchmarks. start compose first or pass --skip-db.")
         return
 
-    pd_ = time_persistence(min(args.events, 1000))
-    report("save_analysis (postgres)", "rows/s", pd_, min(args.events, 1000))
+    n = min(args.events, 1000)
+    pd_ = time_persistence(n)
+    report("save_analysis row-by-row", "rows/s", pd_, n)
+
+    pdb = time_persistence_batched(args.events)
+    report("save_analyses_batch", "rows/s", pdb, args.events)
 
     pld = time_pipeline_stub_llm(logs)
     report("pipeline (llm stubbed)", "events/s", pld, args.events)

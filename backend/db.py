@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import psycopg2
+from psycopg2.extras import execute_values
 from psycopg2.pool import SimpleConnectionPool
 
 from backend.config import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
@@ -53,13 +54,19 @@ def conn() -> Iterator[psycopg2.extensions.connection]:
 
 
 def save_analysis(trace_id: str, log_text: str, analysis: str, model: str) -> None:
+    save_analyses_batch([(trace_id, log_text, analysis, model)])
+
+
+def save_analyses_batch(rows: list[tuple[str, str, str, str]]) -> None:
+    """insert many analyses in a single round-trip via execute_values."""
+    if not rows:
+        return
     with conn() as c, c.cursor() as cur:
-        cur.execute(
-            """
-            insert into analyses (trace_id, log_text, analysis, model)
-            values (%s, %s, %s, %s)
-            """,
-            (trace_id, log_text, analysis, model),
+        execute_values(
+            cur,
+            "insert into analyses (trace_id, log_text, analysis, model) values %s",
+            rows,
+            page_size=500,
         )
 
 

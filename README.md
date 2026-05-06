@@ -42,11 +42,14 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 
 bench machine: m2 mac, single-process, postgres in local docker. produced with `PYTHONPATH=. python scripts/benchmark.py --events 20000 --traces 200` against the compose stack.
 
-| stage                     | throughput        |
-|---------------------------|-------------------|
-| correlate (in-memory)     | ~29,000 events/s  |
-| save_analysis (postgres)  | ~2,500 rows/s     |
-| pipeline (llm stubbed)    | ~5,000 events/s   |
+| stage                          | throughput        |
+|--------------------------------|-------------------|
+| correlate (in-memory)          | ~30,000 events/s  |
+| save_analysis row-by-row       | ~2,500 rows/s     |
+| save_analyses_batch            | ~177,000 rows/s   |
+| pipeline (llm stubbed)         | ~5,000 events/s   |
+
+(`save_analyses_batch` uses `psycopg2.extras.execute_values`. the pipeline uses it; the row-by-row figure is kept as a comparison for the pr that switched it.)
 
 these are dev-machine numbers, single-process, no batching of inserts. don't read them as production capacity. they exist so claims in this readme are checkable, not vibes.
 
@@ -79,7 +82,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317 docker compose ...
 - no multi-agent orchestration. previous version called three "agents" (root_cause / fix_suggester / impact) sequentially against the same log bundle. that's three llm calls for marginal extra signal. one prompt does the same job for 1/3 the cost and latency.
 - the eval set has 10 cases. that's enough to spot regressions, not enough to claim accuracy.
 - no auth, no rate limiting, no multi-tenant. single-deployment dev tool.
-- no insert batching on `save_analysis`. fixing it would 10x the ~2.5k rows/s number; left as a deliberate todo.
+- the kafka worker has no dlq for poison messages yet — repeatedly-failing bundles loop. on the punchlist.
 
 ## run it
 
@@ -150,7 +153,6 @@ docker/
 ## things i'd do next if i kept building this
 
 - expand eval set to 50+ cases; switch from keyword scoring to embedding-similarity vs gold answers.
-- batch `save_analysis` inserts (single-row inserts cap throughput at ~2.5k rows/s in the local bench).
 - prompt versioning + side-by-side a/b runs against the eval set per version.
 - circuit breaker around the llm call; fall back to template-based "no analysis" if azure is down.
 - partition `analyses` by `created_at` once it gets big.
