@@ -1,7 +1,7 @@
+import asyncio
 import logging
-import time
 
-from openai import APIError, AzureOpenAI, RateLimitError
+from openai import APIError, AsyncAzureOpenAI, RateLimitError
 
 from backend import metrics as m
 from backend.budget import budget
@@ -38,15 +38,15 @@ def _publish_state() -> None:
     m.llm_circuit_state.set(_STATE_VALUE[breaker.state])
 
 
-_client: AzureOpenAI | None = None
+_client: AsyncAzureOpenAI | None = None
 
 
-def client() -> AzureOpenAI:
+def client() -> AsyncAzureOpenAI:
     global _client
     if _client is None:
         if not AZURE_OPENAI_KEY or not AZURE_OPENAI_ENDPOINT:
             raise RuntimeError("azure openai not configured (AZURE_OPENAI_KEY / AZURE_OPENAI_ENDPOINT)")
-        _client = AzureOpenAI(
+        _client = AsyncAzureOpenAI(
             api_key=AZURE_OPENAI_KEY,
             api_version=AZURE_OPENAI_API_VERSION,
             azure_endpoint=AZURE_OPENAI_ENDPOINT,
@@ -57,7 +57,6 @@ def client() -> AzureOpenAI:
 
 
 def _enrich(result: AnalysisResult) -> AnalysisResult:
-    """fill structured fields from the raw text best-effort, based on prompt version."""
     if result.prompt_version in STRUCTURED_VERSIONS:
         parsed = parse_v3_json(result.raw_text)
     elif result.prompt_version == "v2":
@@ -80,23 +79,15 @@ def _enrich(result: AnalysisResult) -> AnalysisResult:
     return result
 
 
-def analyze(
+async def analyze(
     log_text: str,
     window_seconds: int,
     version: str | None = None,
     seed: int | None = None,
     temperature: float = 0.2,
 ) -> AnalysisResult:
-    """returns an AnalysisResult with raw_text always populated. structured fields
-    (category / root_cause / next_step / evidence / confidence) are filled when the prompt
-    version is structured (v3) or parseable (v2).
-
-    `seed` makes the call deterministic for the same input (useful for agreement testing
-    across runs at higher temperature). `temperature` controls sampling variance.
-
-    raises BudgetExceeded when today's spend meets the daily limit.
-    raises CircuitOpen when the breaker is currently open.
-    retries rate limits / 5xx within a single call; the breaker tracks call-level outcome."""
+    """async azure openai call. retries rate limits / 5xx within a single call.
+    raises BudgetExceeded when over budget; raises CircuitOpen when the breaker is tripped."""
     budget.check()
     breaker.before_call()
     _publish_state()
@@ -122,7 +113,7 @@ def analyze(
     last_err: Exception | None = None
     for attempt in range(LLM_MAX_RETRIES + 1):
         try:
-            resp = client().chat.completions.create(**request_kwargs)
+            resp = await client().chat.completions.create(**request_kwargs)
             usage = resp.usage
             if usage is not None:
                 spent = budget.record(
@@ -148,13 +139,13 @@ def analyze(
             last_err = e
             wait = 2**attempt
             log.warning("llm rate-limited, retrying in %ss attempt=%d", wait, attempt + 1)
-            time.sleep(wait)
+            await asyncio.sleep(wait)
         except APIError as e:
             last_err = e
             log.exception("llm api error attempt=%d", attempt + 1)
             if attempt == LLM_MAX_RETRIES:
                 break
-            time.sleep(1)
+            await asyncio.sleep(1)
 
     breaker.on_failure()
     _publish_state()

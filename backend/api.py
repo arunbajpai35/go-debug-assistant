@@ -1,10 +1,10 @@
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -47,10 +47,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        db.close_pool()
+        await db.close_pool()
 
 
-app = FastAPI(title="debug-assistant", version="0.7.0", lifespan=lifespan)
+app = FastAPI(title="debug-assistant", version="0.8.0", lifespan=lifespan)
 tracing.instrument_fastapi(app)
 
 _RATE_LIMITED_PATHS = {"/analyze"}
@@ -115,7 +115,6 @@ def healthz() -> dict:
 
 @app.get("/version")
 def version() -> dict:
-    import os
     return {
         "version": app.version,
         "git_sha": os.getenv("GIT_SHA", "unknown"),
@@ -133,11 +132,9 @@ def budget_status() -> dict:
 
 
 @app.get("/readyz")
-def readyz() -> Response:
+async def readyz() -> Response:
     try:
-        with db.conn() as c, c.cursor() as cur:
-            cur.execute("select 1")
-            cur.fetchone()
+        await db.ping()
     except Exception as e:
         log.warning("readyz failed: %s", e)
         return Response('{"ok":false,"db":"down"}', media_type="application/json", status_code=503)
@@ -157,14 +154,14 @@ async def analyze(req: AnalyzeRequest) -> dict:
     window = req.window_seconds or WINDOW_SECONDS
     payload = [entry.model_dump() for entry in req.logs]
     log.info("analyze accepted", extra={"logs_count": len(payload), "window_seconds": window})
-    results = await run_in_threadpool(pipeline.process, payload, window)
+    results = await pipeline.process(payload, window)
     log.info("analyze completed", extra={"results_count": len(results)})
     return {"results": results, "count": len(results)}
 
 
 @app.get("/analysis/{trace_id}")
-def get_analysis(trace_id: str) -> dict:
-    row = db.get_analysis(trace_id)
+async def get_analysis(trace_id: str) -> dict:
+    row = await db.get_analysis(trace_id)
     if not row:
         raise HTTPException(404, "analysis not found")
     return row

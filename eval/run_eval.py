@@ -27,6 +27,7 @@ the embedding cache covers analysis text identity, so identical outputs across r
 to score.
 """
 import argparse
+import asyncio
 import itertools
 import json
 import statistics
@@ -147,12 +148,14 @@ def main() -> int:
         for run_idx in range(args.runs):
             t0 = time.perf_counter()
             try:
-                res = llm.analyze(
-                    text,
-                    WINDOW_SECONDS,
-                    version=args.version,
-                    seed=run_idx + 1,
-                    temperature=args.temperature,
+                res = asyncio.run(
+                    llm.analyze(
+                        text,
+                        WINDOW_SECONDS,
+                        version=args.version,
+                        seed=run_idx + 1,
+                        temperature=args.temperature,
+                    )
                 )
                 run_outputs.append(res.raw_text)
                 run_categories.append(res.category)
