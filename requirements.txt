@@ -1,23 +1,23 @@
 # runtime — what the container needs to serve traffic.
 fastapi==0.136.1  # bumped from 0.116.x because that line caps starlette<0.48 (still vulnerable to CVE-2025-62727)
 starlette==0.49.1
-uvicorn==0.35.0
-pydantic==2.11.7
+uvicorn==0.46.0
+pydantic==2.13.4
 python-dotenv==1.1.1
-openai==1.97.0
-psycopg2-binary==2.9.10  # alembic migrations only; runtime is asyncpg
-sqlalchemy==2.0.36
-asyncpg==0.30.0
-alembic==1.14.0
+openai==2.35.0
+psycopg2-binary==2.9.12  # alembic migrations only; runtime is asyncpg
+sqlalchemy==2.0.49
+asyncpg==0.31.0
+alembic==1.18.4
 greenlet==3.1.1
-kafka-python==2.2.15
-prometheus-client==0.20.0
-redis==5.2.0
+kafka-python==2.3.1
+prometheus-client==0.25.0
+redis==7.4.0
 
 # observability
-opentelemetry-api==1.30.0
-opentelemetry-sdk==1.30.0
-opentelemetry-exporter-otlp-proto-grpc==1.30.0
-opentelemetry-instrumentation-fastapi==0.51b0
-opentelemetry-instrumentation-psycopg2==0.51b0
+opentelemetry-api==1.41.1
+opentelemetry-sdk==1.41.1
+opentelemetry-exporter-otlp-proto-grpc==1.41.1
+opentelemetry-instrumentation-fastapi==0.62b1
+opentelemetry-instrumentation-psycopg2==0.62b1
 setuptools>=69
