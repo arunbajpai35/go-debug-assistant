@@ -38,6 +38,10 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 - prometheus_client for metrics
 - pytest for unit tests on the correlator
 
+## storage
+
+`analyses` is range-partitioned by `created_at` with monthly partitions and a `analyses_default` catch-all so writes never fail. monthly partitions for the next ~14 months are pre-created by migration 0004; future months are added by `python scripts/create_analysis_partitions.py --months 6` (run from cron). drop a partition once it ages out instead of deleting rows. primary key is `(id, created_at)` — id is still practically unique because the bigserial sequence is shared across partitions.
+
 ## kafka offset semantics
 
 the worker tracks each consumed message as `(topic, partition, offset, trace_id)`. on bundle completion (success or dlq) it removes those offsets from the partition's in-flight set and commits the earliest still-unprocessed offset on each affected partition. this is precise per-partition offset tracking — a hard kill mid-buffer redelivers exactly the unprocessed traces, not already-flushed ones.
