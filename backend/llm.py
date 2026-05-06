@@ -80,10 +80,19 @@ def _enrich(result: AnalysisResult) -> AnalysisResult:
     return result
 
 
-def analyze(log_text: str, window_seconds: int, version: str | None = None) -> AnalysisResult:
+def analyze(
+    log_text: str,
+    window_seconds: int,
+    version: str | None = None,
+    seed: int | None = None,
+    temperature: float = 0.2,
+) -> AnalysisResult:
     """returns an AnalysisResult with raw_text always populated. structured fields
     (category / root_cause / next_step / evidence / confidence) are filled when the prompt
     version is structured (v3) or parseable (v2).
+
+    `seed` makes the call deterministic for the same input (useful for agreement testing
+    across runs at higher temperature). `temperature` controls sampling variance.
 
     raises BudgetExceeded when today's spend meets the daily limit.
     raises CircuitOpen when the breaker is currently open.
@@ -102,9 +111,11 @@ def analyze(log_text: str, window_seconds: int, version: str | None = None) -> A
             {"role": "system", "content": system},
             {"role": "user", "content": user_msg},
         ],
-        "temperature": 0.2,
+        "temperature": temperature,
         "max_tokens": 400,
     }
+    if seed is not None:
+        request_kwargs["seed"] = seed
     if v in STRUCTURED_VERSIONS:
         request_kwargs["response_format"] = {"type": "json_object"}
 
