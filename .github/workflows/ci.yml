@@ -65,6 +65,17 @@ jobs:
           python scripts/dump_openapi.py > /tmp/openapi.new.json
           diff -u openapi.json /tmp/openapi.new.json
 
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install mkdocs mkdocs-material
+      - run: mkdocs build --strict
+
   image-scan:
     runs-on: ubuntu-latest
     permissions:
