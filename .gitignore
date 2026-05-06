@@ -1,0 +1,23 @@
+# Secrets / config
+.env
+.env.*
+!.env.example
+backend/config/config.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Node
+node_modules/
