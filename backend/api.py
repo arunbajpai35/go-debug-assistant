@@ -1,64 +1,76 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
-from backend.aiagent.multi_agent_analysis import analyze_with_agents
-from scripts.sliding_window import correlate_logs
-from internal.routes import api_logs
-from config.config import (
-    AZURE_OPENAI_KEY,
-    AZURE_OPENAI_ENDPOINT,
-    AZURE_OPENAI_MODEL,
-    DB_HOST,
-    DB_PORT,
-    DB_USER,
-    DB_PASSWORD,
-    DB_NAME
-)
-import uuid
-import openai
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel, Field
 
-# Azure OpenAI Setup
-openai.api_key = AZURE_OPENAI_KEY
-openai.api_base = AZURE_OPENAI_ENDPOINT
-openai.api_type = "azure"
-openai.api_version = "2024-02-01"
+from backend import db, metrics, pipeline
+from backend.config import CORS_ORIGINS, MAX_LOGS_PER_REQUEST, WINDOW_SECONDS
 
-app = FastAPI()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+log = logging.getLogger(__name__)
 
-# CORS setup
+
+class LogEntry(BaseModel):
+    timestamp: str
+    level: str = "INFO"
+    message: str
+    trace_id: str
+
+
+class AnalyzeRequest(BaseModel):
+    logs: list[LogEntry] = Field(min_length=1)
+    window_seconds: int | None = None
+
+
+app = FastAPI(title="debug-assistant", version="0.2.0")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3005"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Pydantic models
-class LogEntry(BaseModel):
-    timestamp: str
-    level: str
-    message: str
-    trace_id: str
 
-class AnalyzeRequest(BaseModel):
-    logs: List[LogEntry]
+@app.on_event("startup")
+def _startup() -> None:
+    try:
+        db.init_pool()
+    except Exception:
+        log.exception("postgres pool init failed; api will start but persistence is unavailable")
 
-# Analyze logs route
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    db.close_pool()
+
+
+@app.get("/healthz")
+def healthz() -> dict:
+    return {"ok": True}
+
+
+@app.get("/metrics")
+def prom_metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.post("/analyze")
-async def analyze_logs(request: AnalyzeRequest):
-    logs_by_trace = {}
-    for log in request.logs:
-        logs_by_trace.setdefault(log.trace_id, []).append(log.dict())
+def analyze(req: AnalyzeRequest) -> dict:
+    if len(req.logs) > MAX_LOGS_PER_REQUEST:
+        raise HTTPException(413, f"too many logs (max {MAX_LOGS_PER_REQUEST})")
+    metrics.logs_ingested.labels(source="http").inc(len(req.logs))
+    window = req.window_seconds or WINDOW_SECONDS
+    results = pipeline.process([l.model_dump() for l in req.logs], window_seconds=window)
+    return {"results": results, "count": len(results)}
 
-    formatted_windows = []
-    for trace_id, logs in logs_by_trace.items():
-        log_chunk = "\n".join(f"[{log['timestamp']}] {log['level']}: {log['message']}" for log in logs)
-        formatted_windows.append(log_chunk)
 
-    results = analyze_with_agents(formatted_windows)
-    return {"results": results}
-
-# Include other API routes
-app.include_router(api_logs.router)
+@app.get("/analysis/{trace_id}")
+def get_analysis(trace_id: str) -> dict:
+    row = db.get_analysis(trace_id)
+    if not row:
+        raise HTTPException(404, "analysis not found")
+    return row
