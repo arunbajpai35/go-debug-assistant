@@ -19,7 +19,7 @@ from backend.config import (
     RATE_LIMIT_PER_MINUTE,
     WINDOW_SECONDS,
 )
-from backend.rate_limit import SlidingWindow
+from backend.rate_limit import make_limiter
 
 log_setup.configure()
 tracing.init()
@@ -54,7 +54,7 @@ app = FastAPI(title="debug-assistant", version="0.7.0", lifespan=lifespan)
 tracing.instrument_fastapi(app)
 
 _RATE_LIMITED_PATHS = {"/analyze"}
-_rate_limiter = SlidingWindow(limit=RATE_LIMIT_PER_MINUTE, window_seconds=60.0)
+_rate_limiter = make_limiter(limit=RATE_LIMIT_PER_MINUTE, window_seconds=60.0)
 
 
 def _client_ip(request: Request) -> str:
