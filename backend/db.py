@@ -53,18 +53,18 @@ def conn() -> Iterator[psycopg2.extensions.connection]:
         _pool.putconn(c)
 
 
-def save_analysis(trace_id: str, log_text: str, analysis: str, model: str) -> None:
-    save_analyses_batch([(trace_id, log_text, analysis, model)])
+def save_analysis(trace_id: str, log_text: str, analysis: str, model: str, prompt_version: str = "v1") -> None:
+    save_analyses_batch([(trace_id, log_text, analysis, model, prompt_version)])
 
 
-def save_analyses_batch(rows: list[tuple[str, str, str, str]]) -> None:
+def save_analyses_batch(rows: list[tuple[str, str, str, str, str]]) -> None:
     """insert many analyses in a single round-trip via execute_values."""
     if not rows:
         return
     with conn() as c, c.cursor() as cur:
         execute_values(
             cur,
-            "insert into analyses (trace_id, log_text, analysis, model) values %s",
+            "insert into analyses (trace_id, log_text, analysis, model, prompt_version) values %s",
             rows,
             page_size=500,
         )
@@ -73,7 +73,13 @@ def save_analyses_batch(rows: list[tuple[str, str, str, str]]) -> None:
 def get_analysis(trace_id: str) -> dict | None:
     with conn() as c, c.cursor() as cur:
         cur.execute(
-            "select trace_id, log_text, analysis, model, created_at from analyses where trace_id = %s order by created_at desc limit 1",
+            """
+            select trace_id, log_text, analysis, model, prompt_version, created_at
+            from analyses
+            where trace_id = %s
+            order by created_at desc
+            limit 1
+            """,
             (trace_id,),
         )
         row = cur.fetchone()
@@ -84,7 +90,8 @@ def get_analysis(trace_id: str) -> dict | None:
             "log_text": row[1],
             "analysis": row[2],
             "model": row[3],
-            "created_at": row[4].isoformat(),
+            "prompt_version": row[4],
+            "created_at": row[5].isoformat(),
         }
 
 

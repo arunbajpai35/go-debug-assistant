@@ -11,7 +11,7 @@ SAMPLE_LOGS = [
 
 def test_pipeline_runs_one_llm_call_per_trace_bundle_and_batches_persist():
     with (
-        patch("backend.pipeline.llm.analyze", return_value=("root_cause: db timeout", "gpt-4o-mini")) as analyze,
+        patch("backend.pipeline.llm.analyze", return_value=("root_cause: db timeout", "gpt-4o-mini", "v2")) as analyze,
         patch("backend.pipeline.db.save_analyses_batch") as save_batch,
     ):
         results = pipeline.process(SAMPLE_LOGS, window_seconds=60)
@@ -33,7 +33,7 @@ def test_pipeline_skips_failed_bundle_and_persists_successful_one():
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("simulated rate limit")
-        return ("ok", "gpt-4o-mini")
+        return ("ok", "gpt-4o-mini", "v2")
 
     with (
         patch("backend.pipeline.llm.analyze", side_effect=fail_first),

@@ -57,12 +57,15 @@ llm latency is excluded on purpose — that number reports azure's behaviour, no
 
 ## eval
 
-10 hand-labeled trace bundles in `eval/dataset.json`, scored by keyword + anti-keyword hit rate. small enough to be honest about: this is a smoke test for prompt regressions, not a benchmark. see `eval/README.md` for what it is and what it isn't.
+25 hand-labeled trace bundles in `eval/dataset.json`, scored by keyword + anti-keyword hit rate. small enough to be honest about: this is a smoke test for prompt regressions, not a benchmark. see `eval/README.md`.
 
 ```bash
-python -m eval.run_eval                   # all cases, requires real azure creds
-python -m eval.run_eval --case db_timeout
+python -m eval.run_eval --version v2       # default version, writes eval/results-v2.json
+python -m eval.run_eval --version v1
+python -m eval.compare eval/results-v1.json eval/results-v2.json
 ```
+
+prompts are versioned (`backend/prompts/v{N}.py`); `PROMPT_VERSION` env switches the live system. each persisted analysis records which version produced it (`analyses.prompt_version` column).
 
 ## tracing
 

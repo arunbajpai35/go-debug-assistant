@@ -32,7 +32,7 @@ def app_client():
 
 
 def test_analyze_then_fetch_round_trip(app_client):
-    with patch("backend.pipeline.llm.analyze", return_value=("root_cause: stub", "stub-model")):
+    with patch("backend.pipeline.llm.analyze", return_value=("root_cause: stub", "stub-model", "v2")):
         post = app_client.post(
             "/analyze",
             json={
