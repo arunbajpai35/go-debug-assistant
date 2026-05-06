@@ -257,5 +257,255 @@
     ],
     "expected_keywords": ["serialization", "decode", "json"],
     "anti_keywords": ["memory", "tls", "auth"]
+  },
+  {
+    "id": "goroutine_leak",
+    "logs": [
+      {"timestamp": "2026-05-06T11:00:00Z", "level": "INFO",  "trace_id": "t26", "message": "goroutines=1024 heap_in_use=512MB"},
+      {"timestamp": "2026-05-06T11:10:00Z", "level": "WARN",  "trace_id": "t26", "message": "goroutines=18432 heap_in_use=2.1GB (still growing)"},
+      {"timestamp": "2026-05-06T11:10:00Z", "level": "WARN",  "trace_id": "t26", "message": "pprof shows 17000 goroutines blocked on channel receive in http.handleStream"}
+    ],
+    "expected_keywords": ["goroutine", "leak", "blocked"],
+    "anti_keywords": ["db", "tls", "auth"]
+  },
+  {
+    "id": "clock_skew",
+    "logs": [
+      {"timestamp": "2026-05-06T11:01:00Z", "level": "WARN",  "trace_id": "t27", "message": "ntp not synced; offset=+247s drift=growing"},
+      {"timestamp": "2026-05-06T11:01:01Z", "level": "ERROR", "trace_id": "t27", "message": "aws sigv4 signature rejected: RequestTimeTooSkewed (server time 247s ahead of aws)"},
+      {"timestamp": "2026-05-06T11:01:01Z", "level": "ERROR", "trace_id": "t27", "message": "all outbound s3 calls failing with 403 SignatureDoesNotMatch"}
+    ],
+    "expected_keywords": ["clock", "skew", "ntp"],
+    "anti_keywords": ["memory", "deadlock", "rate"]
+  },
+  {
+    "id": "load_balancer_unhealthy",
+    "logs": [
+      {"timestamp": "2026-05-06T11:02:00Z", "level": "INFO",  "trace_id": "t28", "message": "alb health check on /healthz returning 200"},
+      {"timestamp": "2026-05-06T11:02:01Z", "level": "WARN",  "trace_id": "t28", "message": "/readyz returning 503 db_pool=exhausted but /healthz still 200"},
+      {"timestamp": "2026-05-06T11:02:01Z", "level": "ERROR", "trace_id": "t28", "message": "alb keeps routing traffic: health probe checks /healthz instead of /readyz"}
+    ],
+    "expected_keywords": ["load balancer", "health", "readiness"],
+    "anti_keywords": ["memory", "tls", "kafka"]
+  },
+  {
+    "id": "kafka_partition_imbalance",
+    "logs": [
+      {"timestamp": "2026-05-06T11:03:00Z", "level": "INFO",  "trace_id": "t29", "message": "consumer p0 lag=2 p1 lag=8 p2 lag=14000 p3 lag=4"},
+      {"timestamp": "2026-05-06T11:03:01Z", "level": "WARN",  "trace_id": "t29", "message": "p2 producer using key='checkout' for 92% of messages — single key bucket"},
+      {"timestamp": "2026-05-06T11:03:01Z", "level": "WARN",  "trace_id": "t29", "message": "downstream p99 latency rising due to partition hotspot"}
+    ],
+    "expected_keywords": ["partition", "hot", "key"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "graceful_shutdown_failure",
+    "logs": [
+      {"timestamp": "2026-05-06T11:04:00Z", "level": "INFO",  "trace_id": "t30", "message": "received SIGTERM from k8s; pod terminating"},
+      {"timestamp": "2026-05-06T11:04:00Z", "level": "WARN",  "trace_id": "t30", "message": "in-flight requests count=42; no shutdown handler registered"},
+      {"timestamp": "2026-05-06T11:04:30Z", "level": "ERROR", "trace_id": "t30", "message": "process killed by SIGKILL after 30s grace; 42 client requests dropped"}
+    ],
+    "expected_keywords": ["shutdown", "drain", "sigterm"],
+    "anti_keywords": ["memory", "tls", "kafka"]
+  },
+  {
+    "id": "null_pointer_optional_field",
+    "logs": [
+      {"timestamp": "2026-05-06T11:05:00Z", "level": "INFO",  "trace_id": "t31", "message": "POST /webhook payload received from partner=acme"},
+      {"timestamp": "2026-05-06T11:05:00Z", "level": "ERROR", "trace_id": "t31", "message": "AttributeError: 'NoneType' object has no attribute 'amount'"},
+      {"timestamp": "2026-05-06T11:05:00Z", "level": "ERROR", "trace_id": "t31", "message": "webhook handler crashed: optional field 'transaction.amount' was null but assumed present"}
+    ],
+    "expected_keywords": ["null", "missing field", "attribute"],
+    "anti_keywords": ["memory", "rate", "deadlock"]
+  },
+  {
+    "id": "schema_drift_consumer",
+    "logs": [
+      {"timestamp": "2026-05-06T11:06:00Z", "level": "INFO",  "trace_id": "t32", "message": "consuming from orders.v2 topic schema=2026-01-04"},
+      {"timestamp": "2026-05-06T11:06:01Z", "level": "WARN",  "trace_id": "t32", "message": "unexpected field 'tax_breakdown' in payload (not in our local schema 2026-01-04)"},
+      {"timestamp": "2026-05-06T11:06:01Z", "level": "ERROR", "trace_id": "t32", "message": "ProtoDecodeError: producer schema 2026-04-30 added required field; consumer not updated"}
+    ],
+    "expected_keywords": ["schema", "drift", "consumer"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "retry_storm_amplification",
+    "logs": [
+      {"timestamp": "2026-05-06T11:07:00Z", "level": "WARN",  "trace_id": "t33", "message": "upstream payments returned 503; retrying immediately (no backoff)"},
+      {"timestamp": "2026-05-06T11:07:00Z", "level": "WARN",  "trace_id": "t33", "message": "5x retries in 1s from 200 in-flight requests = 1000 rps to payments"},
+      {"timestamp": "2026-05-06T11:07:01Z", "level": "ERROR", "trace_id": "t33", "message": "payments service circuit broken: retry storm caused by missing exponential backoff"}
+    ],
+    "expected_keywords": ["retry", "storm", "backoff"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "stale_connection_pool",
+    "logs": [
+      {"timestamp": "2026-05-06T11:08:00Z", "level": "INFO",  "trace_id": "t34", "message": "rds idle_in_transaction_session_timeout=300s; client pool max_idle=600s"},
+      {"timestamp": "2026-05-06T11:08:01Z", "level": "ERROR", "trace_id": "t34", "message": "psycopg2.OperationalError: server closed the connection unexpectedly"},
+      {"timestamp": "2026-05-06T11:08:01Z", "level": "ERROR", "trace_id": "t34", "message": "every checkout from pool fails first attempt; client max_idle exceeds server timeout"}
+    ],
+    "expected_keywords": ["stale", "connection", "pool"],
+    "anti_keywords": ["memory", "auth", "rate"]
+  },
+  {
+    "id": "read_timeout_amplification",
+    "logs": [
+      {"timestamp": "2026-05-06T11:09:00Z", "level": "INFO",  "trace_id": "t35", "message": "tomcat thread pool max=200; current active=200"},
+      {"timestamp": "2026-05-06T11:09:00Z", "level": "WARN",  "trace_id": "t35", "message": "150 of 200 workers blocked on http client read from upstream-x (no read timeout set)"},
+      {"timestamp": "2026-05-06T11:09:01Z", "level": "ERROR", "trace_id": "t35", "message": "service unable to accept new connections; one slow upstream blocked the entire worker pool"}
+    ],
+    "expected_keywords": ["read timeout", "blocked", "worker"],
+    "anti_keywords": ["memory", "auth", "kafka"]
+  },
+  {
+    "id": "log_volume_self_dos",
+    "logs": [
+      {"timestamp": "2026-05-06T11:10:00Z", "level": "INFO",  "trace_id": "t36", "message": "request handler logging at DEBUG: 8000 lines/req"},
+      {"timestamp": "2026-05-06T11:10:01Z", "level": "WARN",  "trace_id": "t36", "message": "stdout pipe is blocking; cpu 78% in write() syscalls"},
+      {"timestamp": "2026-05-06T11:10:01Z", "level": "ERROR", "trace_id": "t36", "message": "request latency p99=12s; root cause: app blocked writing to a slow log sink"}
+    ],
+    "expected_keywords": ["log", "volume", "blocking"],
+    "anti_keywords": ["memory", "auth", "deadlock"]
+  },
+  {
+    "id": "long_transaction_blocking",
+    "logs": [
+      {"timestamp": "2026-05-06T11:11:00Z", "level": "INFO",  "trace_id": "t37", "message": "txn-X started: long-running ETL UPDATE on orders"},
+      {"timestamp": "2026-05-06T11:11:30Z", "level": "WARN",  "trace_id": "t37", "message": "300 unrelated SELECTs queued waiting for row lock held by txn-X"},
+      {"timestamp": "2026-05-06T11:11:30Z", "level": "ERROR", "trace_id": "t37", "message": "checkout p99=42s caused by long-running update transaction holding locks"}
+    ],
+    "expected_keywords": ["long", "transaction", "lock"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "regex_redos",
+    "logs": [
+      {"timestamp": "2026-05-06T11:12:00Z", "level": "INFO",  "trace_id": "t38", "message": "POST /validate received user input length=8192"},
+      {"timestamp": "2026-05-06T11:12:00Z", "level": "WARN",  "trace_id": "t38", "message": "regex /^(a+)+$/ matching against 'aaaa...!' for 4200ms"},
+      {"timestamp": "2026-05-06T11:12:05Z", "level": "ERROR", "trace_id": "t38", "message": "request timed out at proxy after 5s; cpu pinned at 100% on regex backtracking"}
+    ],
+    "expected_keywords": ["regex", "backtracking", "redos"],
+    "anti_keywords": ["memory", "auth", "kafka"]
+  },
+  {
+    "id": "wrong_db_timezone",
+    "logs": [
+      {"timestamp": "2026-05-06T11:13:00Z", "level": "INFO",  "trace_id": "t39", "message": "scheduling reminder for user_local_time=09:00 IST"},
+      {"timestamp": "2026-05-06T11:13:00Z", "level": "WARN",  "trace_id": "t39", "message": "stored as 09:00 in db; db tz=UTC, app assumed IST"},
+      {"timestamp": "2026-05-06T11:13:00Z", "level": "ERROR", "trace_id": "t39", "message": "reminder fired 5h30m early for 12k users due to timezone mismatch between app and db"}
+    ],
+    "expected_keywords": ["timezone", "tz", "utc"],
+    "anti_keywords": ["memory", "auth", "kafka"]
+  },
+  {
+    "id": "premature_traffic_pre_warmup",
+    "logs": [
+      {"timestamp": "2026-05-06T11:14:00Z", "level": "INFO",  "trace_id": "t40", "message": "k8s readiness probe passed at t=2s after start"},
+      {"timestamp": "2026-05-06T11:14:00Z", "level": "WARN",  "trace_id": "t40", "message": "jit warmup not complete; first 30s p99=8s vs steady state p99=200ms"},
+      {"timestamp": "2026-05-06T11:14:00Z", "level": "ERROR", "trace_id": "t40", "message": "rolling deploy: every new pod served 30s of slow traffic before warm; cumulative spike"}
+    ],
+    "expected_keywords": ["warmup", "readiness", "premature"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "leader_election_race_double_run",
+    "logs": [
+      {"timestamp": "2026-05-06T11:15:00Z", "level": "INFO",  "trace_id": "t41", "message": "node-A acquired leader lease for nightly-billing"},
+      {"timestamp": "2026-05-06T11:15:00Z", "level": "INFO",  "trace_id": "t41", "message": "node-B acquired leader lease for nightly-billing (lease ttl race)"},
+      {"timestamp": "2026-05-06T11:15:30Z", "level": "ERROR", "trace_id": "t41", "message": "billing job ran twice for the same period; duplicate invoice rows in stripe"}
+    ],
+    "expected_keywords": ["leader", "election", "duplicate"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "upstream_breaking_change",
+    "logs": [
+      {"timestamp": "2026-05-06T11:16:00Z", "level": "INFO",  "trace_id": "t42", "message": "calling partner /v1/charge with field 'amount_cents'"},
+      {"timestamp": "2026-05-06T11:16:00Z", "level": "WARN",  "trace_id": "t42", "message": "partner response: 400 unknown_field amount_cents (expected 'amount_minor_units')"},
+      {"timestamp": "2026-05-06T11:16:00Z", "level": "ERROR", "trace_id": "t42", "message": "all charges failing; partner deployed breaking field rename without versioning"}
+    ],
+    "expected_keywords": ["upstream", "breaking", "field"],
+    "anti_keywords": ["memory", "deadlock", "kafka"]
+  },
+  {
+    "id": "egress_blocked_by_proxy",
+    "logs": [
+      {"timestamp": "2026-05-06T11:17:00Z", "level": "INFO",  "trace_id": "t43", "message": "outbound https://api.partner.example via corp proxy 10.0.0.5:3128"},
+      {"timestamp": "2026-05-06T11:17:01Z", "level": "ERROR", "trace_id": "t43", "message": "proxy 403 Forbidden: destination not in allowlist (request_id=cp-9821)"},
+      {"timestamp": "2026-05-06T11:17:01Z", "level": "ERROR", "trace_id": "t43", "message": "all partner.example calls blocked; security team's egress allowlist out of date"}
+    ],
+    "expected_keywords": ["proxy", "egress", "allowlist"],
+    "anti_keywords": ["memory", "kafka", "auth"]
+  },
+  {
+    "id": "service_mesh_misroute",
+    "logs": [
+      {"timestamp": "2026-05-06T11:18:00Z", "level": "INFO",  "trace_id": "t44", "message": "outbound to checkout.svc.cluster.local"},
+      {"timestamp": "2026-05-06T11:18:00Z", "level": "WARN",  "trace_id": "t44", "message": "envoy x-cluster=checkout-staging instead of checkout-prod"},
+      {"timestamp": "2026-05-06T11:18:00Z", "level": "ERROR", "trace_id": "t44", "message": "production traffic routed to staging cluster; recent virtualservice change introduced a bad selector"}
+    ],
+    "expected_keywords": ["service mesh", "envoy", "route"],
+    "anti_keywords": ["memory", "auth", "kafka"]
+  },
+  {
+    "id": "stuck_consumer_rebalance",
+    "logs": [
+      {"timestamp": "2026-05-06T11:19:00Z", "level": "INFO",  "trace_id": "t45", "message": "kafka group orders-consumer state=PreparingRebalance generation=42"},
+      {"timestamp": "2026-05-06T11:19:30Z", "level": "WARN",  "trace_id": "t45", "message": "rebalance taking >30s; one member is unresponsive (member_id=k-7e00e78d)"},
+      {"timestamp": "2026-05-06T11:20:30Z", "level": "ERROR", "trace_id": "t45", "message": "consumer group stuck in PreparingRebalance for 90s; lag growing 8000/s"}
+    ],
+    "expected_keywords": ["rebalance", "stuck", "consumer"],
+    "anti_keywords": ["memory", "auth", "tls"]
+  },
+  {
+    "id": "memory_fragmentation_jvm",
+    "logs": [
+      {"timestamp": "2026-05-06T11:20:00Z", "level": "INFO",  "trace_id": "t46", "message": "g1 gc full=12 mixed=300 young=4500 in last hour"},
+      {"timestamp": "2026-05-06T11:20:01Z", "level": "WARN",  "trace_id": "t46", "message": "old gen humongous regions=24% (threshold 40%); fragmentation rising"},
+      {"timestamp": "2026-05-06T11:20:02Z", "level": "ERROR", "trace_id": "t46", "message": "to-space exhausted during young gc; full gc pause 8s caused by humongous allocation"}
+    ],
+    "expected_keywords": ["gc", "fragmentation", "humongous"],
+    "anti_keywords": ["auth", "tls", "kafka"]
+  },
+  {
+    "id": "cookie_request_too_large",
+    "logs": [
+      {"timestamp": "2026-05-06T11:21:00Z", "level": "INFO",  "trace_id": "t47", "message": "incoming GET /me with 18 cookies size=42KB"},
+      {"timestamp": "2026-05-06T11:21:00Z", "level": "WARN",  "trace_id": "t47", "message": "nginx returned 431 Request Header Fields Too Large"},
+      {"timestamp": "2026-05-06T11:21:00Z", "level": "ERROR", "trace_id": "t47", "message": "users with stale auth cookies + tracking cookies + experiment cookies hit the 32KB limit"}
+    ],
+    "expected_keywords": ["cookie", "header", "too large"],
+    "anti_keywords": ["memory", "kafka", "deadlock"]
+  },
+  {
+    "id": "dns_blackhole",
+    "logs": [
+      {"timestamp": "2026-05-06T11:22:00Z", "level": "INFO",  "trace_id": "t48", "message": "starting outbound calls; resolv.conf nameserver=10.0.0.99"},
+      {"timestamp": "2026-05-06T11:22:00Z", "level": "WARN",  "trace_id": "t48", "message": "resolver 10.0.0.99 not responding to queries (timeouts)"},
+      {"timestamp": "2026-05-06T11:22:30Z", "level": "ERROR", "trace_id": "t48", "message": "all outbound https calls failing with NameResolutionError; resolver IP is wrong after recent vpc change"}
+    ],
+    "expected_keywords": ["dns", "resolver", "nameserver"],
+    "anti_keywords": ["auth", "rate", "memory"]
+  },
+  {
+    "id": "hot_pk_sequence_bottleneck",
+    "logs": [
+      {"timestamp": "2026-05-06T11:23:00Z", "level": "INFO",  "trace_id": "t49", "message": "INSERT into events; sequence events_id_seq nextval contention"},
+      {"timestamp": "2026-05-06T11:23:00Z", "level": "WARN",  "trace_id": "t49", "message": "events_id_seq advisory lock held p99=80ms; insert throughput plateaued at 8000/s"},
+      {"timestamp": "2026-05-06T11:23:01Z", "level": "ERROR", "trace_id": "t49", "message": "single hot sequence is the bottleneck during peak; consider sharding or uuid v7"}
+    ],
+    "expected_keywords": ["sequence", "hot", "bottleneck"],
+    "anti_keywords": ["auth", "tls", "memory"]
+  },
+  {
+    "id": "deploy_rollout_partial",
+    "logs": [
+      {"timestamp": "2026-05-06T11:24:00Z", "level": "INFO",  "trace_id": "t50", "message": "rolling deploy: 3/10 pods on new image v1.2.3, 7/10 on v1.2.2"},
+      {"timestamp": "2026-05-06T11:24:30Z", "level": "WARN",  "trace_id": "t50", "message": "v1.2.3 introduced new request field; v1.2.2 pods 400 on those requests"},
+      {"timestamp": "2026-05-06T11:24:30Z", "level": "ERROR", "trace_id": "t50", "message": "30% of traffic failing during deploy: incompatible request schema across pod versions"}
+    ],
+    "expected_keywords": ["deploy", "rollout", "incompatible"],
+    "anti_keywords": ["memory", "auth", "kafka"]
   }
 ]

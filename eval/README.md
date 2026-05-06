@@ -1,10 +1,10 @@
 # eval
 
-25 hand-crafted log bundles, each with a known root cause and expected/anti keywords. used to spot-check whether a prompt change makes outputs better or worse before shipping.
+50 hand-crafted log bundles, each with a known root cause and expected/anti keywords. used to spot-check whether a prompt change makes outputs better or worse before shipping.
 
-**this is not a benchmark and should not be cited as one.**
-- 25 cases is small. it spots regressions, it does not measure accuracy.
-- keyword scoring is brittle: it rewards correct *vocabulary* in the answer, not correct *understanding*.
+**this is small enough to be honest about.**
+- 50 cases gives a usable signal for a/b prompt comparison and regression. it is not a published-paper benchmark.
+- keyword scoring rewards correct *vocabulary* in the answer, not correct *understanding*. addressed in a later pr by adding embedding-similarity scoring against gold-standard answers.
 - anti-keywords catch obvious wrong directions but miss subtle errors.
 
 ## what it's actually good for
@@ -54,7 +54,6 @@ a case is "passing" if `case_score >= 0.7`. look at per-case results, not just t
 
 ## what's still missing (deliberate, not pretending)
 
-- 50+ cases would let you make a real claim. 25 lets you spot regressions, not measure accuracy.
-- structured outputs scored against named fields (root_cause, category) instead of free text.
+- structured outputs scored against named fields (root_cause, category) instead of free text. v3 prompt already populates them; the scorer doesn't yet use them.
 - agreement metric across multiple llm runs (same case, same prompt, multiple seeds).
 - gold-standard analyses written by a human, scored via embedding similarity instead of keyword match.

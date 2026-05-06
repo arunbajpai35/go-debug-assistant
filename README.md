@@ -57,7 +57,7 @@ llm latency is excluded on purpose — that number reports azure's behaviour, no
 
 ## eval
 
-25 hand-labeled trace bundles in `eval/dataset.json`, scored by keyword + anti-keyword hit rate. small enough to be honest about: this is a smoke test for prompt regressions, not a benchmark. see `eval/README.md`.
+50 hand-labeled trace bundles in `eval/dataset.json`, scored by keyword + anti-keyword hit rate. small enough to be honest about: this is a smoke test for prompt regressions, not a benchmark. see `eval/README.md`.
 
 ```bash
 python -m eval.run_eval --version v2       # default version, writes eval/results-v2.json
