@@ -1,19 +1,20 @@
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend import db, metrics, pipeline, tracing
+from backend import db, log_setup, metrics, pipeline, tracing
 from backend.config import CORS_ORIGINS, MAX_LOGS_PER_REQUEST, WINDOW_SECONDS
 
+log_setup.configure()
 tracing.init()
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger(__name__)
 
 
@@ -41,9 +42,23 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         db.close_pool()
 
 
-app = FastAPI(title="debug-assistant", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="debug-assistant", version="0.6.0", lifespan=lifespan)
 tracing.instrument_fastapi(app)
 
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        token = log_setup.request_id_ctx.set(rid)
+        try:
+            response = await call_next(request)
+            response.headers["x-request-id"] = rid
+            return response
+        finally:
+            log_setup.request_id_ctx.reset(token)
+
+
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -82,7 +97,9 @@ async def analyze(req: AnalyzeRequest) -> dict:
     metrics.logs_ingested.labels(source="http").inc(len(req.logs))
     window = req.window_seconds or WINDOW_SECONDS
     payload = [entry.model_dump() for entry in req.logs]
+    log.info("analyze accepted", extra={"logs_count": len(payload), "window_seconds": window})
     results = await run_in_threadpool(pipeline.process, payload, window)
+    log.info("analyze completed", extra={"results_count": len(results)})
     return {"results": results, "count": len(results)}
 
 
