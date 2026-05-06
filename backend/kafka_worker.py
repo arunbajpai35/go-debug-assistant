@@ -56,12 +56,15 @@ def consume() -> None:
             buffers[trace_id].append(entry)
             last_seen[trace_id] = time.time()
             metrics.logs_ingested.labels(source="kafka").inc()
+            log.debug("buffered trace_id=%s size=%d", trace_id, len(buffers[trace_id]))
             if len(buffers[trace_id]) >= BATCH_MAX:
+                log.info("flushing trace_id=%s reason=batch_full size=%d", trace_id, len(buffers[trace_id]))
                 _flush(trace_id, buffers, last_seen, consumer)
 
         now = time.time()
         for trace_id in list(buffers.keys()):
             if now - last_seen.get(trace_id, now) >= FLUSH_IDLE_SECONDS:
+                log.info("flushing trace_id=%s reason=idle size=%d", trace_id, len(buffers[trace_id]))
                 _flush(trace_id, buffers, last_seen, consumer)
 
     consumer.close()
