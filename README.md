@@ -80,6 +80,10 @@ prompts are versioned (`backend/prompts/v{N}.py`); `PROMPT_VERSION` env switches
 - **per-ip sliding-window rate limit** on `/analyze`. `RATE_LIMIT_PER_MINUTE` env (default 30). 429 responses include a `retry-after` header. in-memory by default; if `REDIS_URL` is set, switches automatically to a redis-backed sorted-set implementation safe for multi-replica deployments.
 - **daily llm $ budget cap**: `LLM_DAILY_BUDGET_USD` env (default 5.0). estimated from openai usage tokens × per-model price table; resets at utc midnight. in-memory by default; redis-backed when `REDIS_URL` is set so all replicas share the same daily counter. `GET /budget` exposes current spend / remaining.
 - **circuit breaker** around the llm call. trips after `LLM_CB_FAILURE_THRESHOLD` consecutive failures (default 5), refuses calls for `LLM_CB_COOLDOWN_SECONDS` (default 30s), then allows one trial in `half_open`. exposed as the `llm_circuit_state` prometheus gauge (0=closed, 1=half_open, 2=open).
+- **cors prod profile**: `CORS_ALLOW_METHODS` (default `GET,POST,OPTIONS`) and `CORS_ALLOW_HEADERS` (default `content-type,x-request-id`) are explicit, not wildcards.
+- **generic 500 handler**: any unhandled exception logs the full traceback server-side and returns `{"detail":"internal error","request_id":"..."}` to the client. tracebacks never leak.
+- **container image**: multi-stage docker build (compile in builder, copy wheels into a slim runtime). final image runs as a non-root `app` user.
+- **dependabot + trivy**: weekly grouped pip pr's, monthly action/docker pr's, ci fails on HIGH/CRITICAL os or library vulns in the runtime image.
 
 both are guard rails, not invoices. real cost lives on azure's bill.
 

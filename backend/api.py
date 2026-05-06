@@ -13,6 +13,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend import db, log_setup, metrics, pipeline, tracing
 from backend.budget import budget as llm_budget
 from backend.config import (
+    CORS_ALLOW_HEADERS,
+    CORS_ALLOW_METHODS,
     CORS_ORIGINS,
     LLM_DAILY_BUDGET_USD,
     MAX_LOGS_PER_REQUEST,
@@ -101,11 +103,25 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOW_METHODS,
+    allow_headers=CORS_ALLOW_HEADERS,
 )
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestIdMiddleware)
+
+
+@app.exception_handler(Exception)
+async def _handle_unexpected(request: Request, exc: Exception) -> Response:
+    """generic 500 handler — logs the full traceback but does NOT leak it to the client.
+    fastapi's default returns "Internal Server Error" plain text; we replace it with a json
+    body that carries the request_id for support workflows.
+
+    rid is read directly from the request header instead of the contextvar — by the time
+    the exception handler runs, BaseHTTPMiddleware may have already reset the contextvar."""
+    log.exception("unhandled exception path=%s", request.url.path)
+    rid = request.headers.get("x-request-id") or log_setup.request_id_ctx.get() or "unknown"
+    body = f'{{"detail":"internal error","request_id":"{rid}"}}'
+    return Response(body, media_type="application/json", status_code=500)
 
 
 @app.get("/healthz")
