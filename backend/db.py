@@ -95,12 +95,29 @@ def get_analysis(trace_id: str) -> dict | None:
         }
 
 
-def save_raw_log(trace_id: str, level: str, message: str, ts: str, payload: dict | None = None) -> None:
+def save_raw_logs_batch(entries: list[dict]) -> None:
+    """persist many raw log records via execute_values. entries without `trace_id` or
+    `timestamp` are dropped (the schema forbids null trace_id and the correlator drops them
+    anyway)."""
+    if not entries:
+        return
+    rows: list[tuple[str, str, str, str, str | None]] = []
+    for e in entries:
+        trace_id = e.get("trace_id")
+        ts = e.get("timestamp")
+        if not trace_id or not ts:
+            continue
+        # everything not already a column lands in payload as jsonb
+        payload = {k: v for k, v in e.items() if k not in {"trace_id", "level", "message", "timestamp"}}
+        rows.append(
+            (trace_id, e.get("level", "INFO"), e.get("message", ""), ts, json.dumps(payload) if payload else None)
+        )
+    if not rows:
+        return
     with conn() as c, c.cursor() as cur:
-        cur.execute(
-            """
-            insert into raw_logs (trace_id, level, message, ts, payload)
-            values (%s, %s, %s, %s, %s)
-            """,
-            (trace_id, level, message, ts, json.dumps(payload) if payload else None),
+        execute_values(
+            cur,
+            "insert into raw_logs (trace_id, level, message, ts, payload) values %s",
+            rows,
+            page_size=1000,
         )

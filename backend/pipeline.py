@@ -18,6 +18,14 @@ def process(logs: list[dict], window_seconds: int) -> list[dict]:
         root.set_attribute("logs.count", len(logs))
         root.set_attribute("window.seconds", window_seconds)
 
+        try:
+            with tracer.start_as_current_span("db.save_raw_logs_batch") as span:
+                db.save_raw_logs_batch(logs)
+                span.set_attribute("rows", len(logs))
+                metrics.raw_logs_persisted.inc(len(logs))
+        except Exception:
+            log.exception("raw_logs save failed; continuing with correlation")
+
         with tracer.start_as_current_span("correlate"):
             bundles = correlate(logs, window_seconds=window_seconds)
         metrics.windows_correlated.inc(len(bundles))
