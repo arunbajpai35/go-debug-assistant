@@ -34,7 +34,19 @@ def app_client():
 
 
 def test_analyze_then_fetch_round_trip(app_client):
-    with patch("backend.pipeline.llm.analyze", return_value=("root_cause: stub", "stub-model", "v2")):
+    from backend.llm_schema import AnalysisResult
+
+    stub = AnalysisResult(
+        raw_text='{"category":"db","root_cause":"stub","next_step":"x","evidence":[],"confidence":"low"}',
+        model="stub-model",
+        prompt_version="v3",
+        category="db",
+        root_cause="stub",
+        next_step="x",
+        evidence=[],
+        confidence="low",
+    )
+    with patch("backend.pipeline.llm.analyze", return_value=stub):
         post = app_client.post(
             "/analyze",
             json={
@@ -51,13 +63,15 @@ def test_analyze_then_fetch_round_trip(app_client):
     assert post.status_code == 200
     body = post.json()
     assert body["count"] == 1
-    assert body["results"][0]["analysis"] == "root_cause: stub"
+    assert body["results"][0]["category"] == "db"
 
     fetched = app_client.get("/analysis/int-trace-1")
     assert fetched.status_code == 200
     row = fetched.json()
     assert row["trace_id"] == "int-trace-1"
-    assert row["analysis"] == "root_cause: stub"
+    assert row["category"] == "db"
+    assert row["root_cause"] == "stub"
+    assert row["confidence"] == "low"
     assert row["model"] == "stub-model"
 
 
@@ -70,8 +84,10 @@ def test_readyz_against_real_db(app_client):
 def test_raw_logs_persisted_during_analyze(app_client):
     """/analyze should persist input logs to raw_logs (independently of the llm step)."""
     from backend import db
+    from backend.llm_schema import AnalysisResult
 
-    with patch("backend.pipeline.llm.analyze", return_value=("stub", "stub-model", "v2")):
+    stub = AnalysisResult(raw_text="stub", model="stub-model", prompt_version="v1")
+    with patch("backend.pipeline.llm.analyze", return_value=stub):
         post = app_client.post(
             "/analyze",
             json={

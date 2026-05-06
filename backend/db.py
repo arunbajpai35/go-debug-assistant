@@ -53,18 +53,33 @@ def conn() -> Iterator[psycopg2.extensions.connection]:
         _pool.putconn(c)
 
 
-def save_analysis(trace_id: str, log_text: str, analysis: str, model: str, prompt_version: str = "v1") -> None:
-    save_analyses_batch([(trace_id, log_text, analysis, model, prompt_version)])
+AnalysisRow = tuple[
+    str,           # trace_id
+    str,           # log_text
+    str,           # analysis (raw text)
+    str,           # model
+    str,           # prompt_version
+    str | None,    # category
+    str | None,    # root_cause
+    str | None,    # next_step
+    str | None,    # evidence (json-encoded list, or null)
+    str | None,    # confidence
+]
 
 
-def save_analyses_batch(rows: list[tuple[str, str, str, str, str]]) -> None:
+def save_analyses_batch(rows: list[AnalysisRow]) -> None:
     """insert many analyses in a single round-trip via execute_values."""
     if not rows:
         return
     with conn() as c, c.cursor() as cur:
         execute_values(
             cur,
-            "insert into analyses (trace_id, log_text, analysis, model, prompt_version) values %s",
+            (
+                "insert into analyses "
+                "(trace_id, log_text, analysis, model, prompt_version, "
+                " category, root_cause, next_step, evidence, confidence) "
+                "values %s"
+            ),
             rows,
             page_size=500,
         )
@@ -74,7 +89,8 @@ def get_analysis(trace_id: str) -> dict | None:
     with conn() as c, c.cursor() as cur:
         cur.execute(
             """
-            select trace_id, log_text, analysis, model, prompt_version, created_at
+            select trace_id, log_text, analysis, model, prompt_version,
+                   category, root_cause, next_step, evidence, confidence, created_at
             from analyses
             where trace_id = %s
             order by created_at desc
@@ -91,7 +107,12 @@ def get_analysis(trace_id: str) -> dict | None:
             "analysis": row[2],
             "model": row[3],
             "prompt_version": row[4],
-            "created_at": row[5].isoformat(),
+            "category": row[5],
+            "root_cause": row[6],
+            "next_step": row[7],
+            "evidence": row[8],
+            "confidence": row[9],
+            "created_at": row[10].isoformat(),
         }
 
 

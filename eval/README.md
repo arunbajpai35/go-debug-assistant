@@ -20,6 +20,7 @@ prompts live in `backend/prompts/v{N}.py` and are registered in `backend/prompts
 current versions:
 - `v1` — original. `root_cause`, `next_step`, `evidence` fields.
 - `v2` — adds `category` (db|auth|network|memory|config|upstream|cache|kafka|other) and `confidence` (high|medium|low). default since 0.5.
+- `v3` — same fields as v2 but the model is required to return strict json (`response_format=json_object`). parsed fields land in dedicated columns and are scored by name in eval.
 
 ## run
 
