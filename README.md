@@ -103,7 +103,7 @@ cp .env.example .env
 # fill in AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT in .env
 cd docker && docker compose up --build
 # in another terminal, apply migrations:
-docker compose exec api python -m backend.migrate
+docker compose exec api alembic upgrade head
 ```
 
 services:
@@ -150,10 +150,9 @@ backend/
   llm.py              one-call azure openai wrapper, retry on rate limits
   kafka_worker.py     standalone consumer process
   db.py               psycopg2 simple pool + helpers
-  migrate.py          file-based migration runner
+  alembic/            alembic migrations (`alembic upgrade head`)
   metrics.py          prometheus counters + histograms
   config.py           env-only config (.env via python-dotenv)
-  migrations/         versioned sql files
   tests/              pytest unit tests
 docker/
   Dockerfile          built for both api and worker services
