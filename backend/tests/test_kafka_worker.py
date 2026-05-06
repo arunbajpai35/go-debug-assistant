@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend import kafka_worker
 from backend.config import KAFKA_DLQ_TOPIC, KAFKA_MAX_BUNDLE_RETRIES
@@ -19,6 +20,10 @@ def _tracker_for(trace_id: str, partition: int = 0, offsets: tuple[int, ...] = (
     return t
 
 
+def _new_loop() -> asyncio.AbstractEventLoop:
+    return asyncio.new_event_loop()
+
+
 def test_flush_commits_per_partition_on_success_and_drops_retry_state():
     buffers = {"t1": _bundle("t1")}
     last_seen = {"t1": 100.0}
@@ -26,18 +31,19 @@ def test_flush_commits_per_partition_on_success_and_drops_retry_state():
     tracker = _tracker_for("t1")
     consumer = MagicMock()
     producer = MagicMock()
+    loop = _new_loop()
 
-    with patch.object(kafka_worker.pipeline, "process", return_value=[{"trace_id": "t1"}]):
-        kafka_worker._flush("t1", buffers, last_seen, retry_count, tracker, consumer, producer)
+    with patch.object(kafka_worker.pipeline, "process", AsyncMock(return_value=[{"trace_id": "t1"}])):
+        kafka_worker._flush(loop, "t1", buffers, last_seen, retry_count, tracker, consumer, producer)
 
     consumer.commit.assert_called_once()
-    # commit was called with explicit per-partition offsets, not coarse
     kwargs = consumer.commit.call_args.kwargs
     assert "offsets" in kwargs
     assert kwargs["offsets"]
     producer.send.assert_not_called()
     assert "t1" not in buffers
     assert "t1" not in retry_count
+    loop.close()
 
 
 def test_flush_re_buffers_and_bumps_counter_on_failure():
@@ -48,14 +54,16 @@ def test_flush_re_buffers_and_bumps_counter_on_failure():
     tracker = _tracker_for("t1", offsets=(0, 1, 2))
     consumer = MagicMock()
     producer = MagicMock()
+    loop = _new_loop()
 
-    with patch.object(kafka_worker.pipeline, "process", side_effect=RuntimeError("llm down")):
-        kafka_worker._flush("t1", buffers, last_seen, retry_count, tracker, consumer, producer)
+    with patch.object(kafka_worker.pipeline, "process", AsyncMock(side_effect=RuntimeError("llm down"))):
+        kafka_worker._flush(loop, "t1", buffers, last_seen, retry_count, tracker, consumer, producer)
 
     consumer.commit.assert_not_called()
     producer.send.assert_not_called()
     assert buffers["t1"] == bundle
     assert retry_count["t1"] == 1
+    loop.close()
 
 
 def test_flush_ships_to_dlq_after_exceeding_retry_budget_and_commits():
@@ -66,9 +74,10 @@ def test_flush_ships_to_dlq_after_exceeding_retry_budget_and_commits():
     tracker = _tracker_for("t1", offsets=(0, 1, 2))
     consumer = MagicMock()
     producer = MagicMock()
+    loop = _new_loop()
 
-    with patch.object(kafka_worker.pipeline, "process", side_effect=RuntimeError("llm down")):
-        kafka_worker._flush("t1", buffers, last_seen, retry_count, tracker, consumer, producer)
+    with patch.object(kafka_worker.pipeline, "process", AsyncMock(side_effect=RuntimeError("llm down"))):
+        kafka_worker._flush(loop, "t1", buffers, last_seen, retry_count, tracker, consumer, producer)
 
     assert producer.send.call_count == len(bundle)
     for call in producer.send.call_args_list:
@@ -76,14 +85,17 @@ def test_flush_ships_to_dlq_after_exceeding_retry_budget_and_commits():
     consumer.commit.assert_called_once()
     assert "t1" not in buffers
     assert "t1" not in retry_count
+    loop.close()
 
 
 def test_flush_no_op_on_empty_bundle():
     buffers: dict = {}
     consumer = MagicMock()
     producer = MagicMock()
+    loop = _new_loop()
 
-    kafka_worker._flush("t1", buffers, {}, {}, OffsetTracker(), consumer, producer)
+    kafka_worker._flush(loop, "t1", buffers, {}, {}, OffsetTracker(), consumer, producer)
 
     consumer.commit.assert_not_called()
     producer.send.assert_not_called()
+    loop.close()

@@ -16,6 +16,7 @@ reliability:
     to `KAFKA_DLQ_TOPIC`, the trace's offsets are completed, and the per-partition watermark
     advances normally.
   - sigint/sigterm flips a flag; the main loop drains remaining buffers, then exits."""
+import asyncio
 import json
 import logging
 import signal
@@ -75,6 +76,8 @@ def _make_producer() -> KafkaProducer:
 
 def consume() -> None:
     db.init_pool()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     consumer = _make_consumer()
     producer = _make_producer()
     tracker = OffsetTracker()
@@ -109,26 +112,28 @@ def consume() -> None:
                 metrics.worker_buffers.set(len(buffers))
                 if len(buffers[trace_id]) >= KAFKA_BATCH_MAX:
                     log.info("flushing trace_id=%s reason=batch_full size=%d", trace_id, len(buffers[trace_id]))
-                    _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
+                    _flush(loop, trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
             now = time.time()
             for trace_id in list(buffers.keys()):
                 if now - last_seen.get(trace_id, now) >= KAFKA_FLUSH_IDLE_SECONDS:
                     log.info("flushing trace_id=%s reason=idle size=%d", trace_id, len(buffers[trace_id]))
-                    _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
+                    _flush(loop, trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
         log.info("draining %d remaining buffer(s) before exit", len(buffers))
         for trace_id in list(buffers.keys()):
-            _flush(trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
+            _flush(loop, trace_id, buffers, last_seen, retry_count, tracker, consumer, producer)
 
     finally:
         producer.flush()
         producer.close()
         consumer.close()
-        db.close_pool()
+        loop.run_until_complete(db.close_pool())
+        loop.close()
 
 
 def _flush(
+    loop: asyncio.AbstractEventLoop,
     trace_id: str,
     buffers: dict,
     last_seen: dict,
@@ -143,7 +148,7 @@ def _flush(
     if not bundle:
         return
     try:
-        pipeline.process(bundle, window_seconds=WINDOW_SECONDS)
+        loop.run_until_complete(pipeline.process(bundle, window_seconds=WINDOW_SECONDS))
         commits = tracker.complete(trace_id)
         if commits:
             consumer.commit(offsets=commits)

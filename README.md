@@ -31,12 +31,12 @@ repo name is `go-debug-assistant` for historical reasons; the implementation is 
 
 ## stack
 
-- python 3.12, fastapi, uvicorn
-- postgres (psycopg2 + simple connection pool, schema migrations in `backend/migrations/`)
-- kafka (kafka-python consumer in `backend/kafka_worker.py`)
-- azure openai (single prompt, no agent framework)
-- prometheus_client for metrics
-- pytest for unit tests on the correlator
+- python 3.12, fastapi, uvicorn (fully async hot path)
+- postgres via sqlalchemy core + asyncpg at runtime; psycopg2 only for alembic migrations
+- kafka (kafka-python consumer in `backend/kafka_worker.py`; runs a single asyncio event loop and `loop.run_until_complete()` per flush)
+- azure openai via `AsyncAzureOpenAI` (versioned prompts, structured json output for v3)
+- prometheus_client for metrics, opentelemetry for traces
+- pytest + pytest-asyncio for unit + integration tests
 
 ## storage
 
@@ -181,4 +181,3 @@ docker/
 - prompt versioning + side-by-side a/b runs against the eval set per version.
 - circuit breaker around the llm call; fall back to template-based "no analysis" if azure is down.
 - partition `analyses` by `created_at` once it gets big.
-- replace simple connection pool with asyncpg + sqlalchemy core.
